@@ -1,0 +1,32 @@
+{
+    "author": "GloBee",
+    "name": "woocommerce-payment-api-plugin",
+    "license": "MIT",
+    "description": "GloBee payment gateway for WooCommerce",
+    "version": "1.0.0",
+	"repositories": [
+        {
+            "type": "package",
+            "package": {
+                "name": "wordpress",
+                "version": "4.9.5",
+                "dist": {
+                    "type": "zip",
+                    "url": "https://github.com/WordPress/WordPress/archive/4.9.5.zip"
+                }
+            }
+        }
+    ],
+    "require": {
+        "globee/payment-api": "v0.1.0"
+    },
+	"require-dev": {
+        "wp-cli/wp-cli": "*",
+        "fabpot/php-cs-fixer": "@stable",
+        "phpunit/phpunit": "~4.8"
+	},
+  "minimum-stability": "stable",
+  "config": {
+      "bin-dir": "bin/"
+  }
+}

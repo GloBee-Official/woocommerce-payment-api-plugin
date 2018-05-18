@@ -16,6 +16,20 @@ if (false === defined('ABSPATH')) {
     exit;
 }
 
+try {
+    require_once __DIR__.'/lib/Connectors/Connector.php';
+    require_once __DIR__.'/lib/Connectors/CurlWrapper.php';
+    require_once __DIR__.'/lib/Connectors/GloBeeCurlConnector.php';
+    require_once __DIR__.'/lib/PaymentApi.php';
+    require_once __DIR__.'/lib/Models/PropertyTrait.php';
+    require_once __DIR__.'/lib/Models/Model.php';
+    require_once __DIR__.'/lib/Models/PaymentRequest.php';
+    require_once __DIR__.'/lib/Exceptions/Http/HttpException.php';
+    require_once __DIR__.'/lib/Exceptions/Http/AuthenticationException.php';
+} catch (\Exception $exception) {
+    throw new \Exception('The PaymentAPI plugin was not installed correctly or the files are corrupt. Please reinstall the plugin. If this message persists after a reinstall, contact support@globee.com with this message.');
+}
+
 add_action('plugins_loaded', 'globee_woocommerce_init', 0);
 register_activation_hook(__FILE__, 'globee_woocommerce_activate');
 
@@ -42,7 +56,6 @@ function globee_woocommerce_init()
         public function __construct()
         {
             $this->id = 'globee';
-            $this->title = 'GloBee';
             $this->icon = plugin_dir_url(__FILE__).'assets/images/icon.png';
             $this->has_fields = false;
             $this->method_title = 'GloBee';
@@ -52,8 +65,12 @@ function globee_woocommerce_init()
             $this->init_form_fields();
             $this->init_settings();
 
+            $this->title = $this->get_option('title');
+            $this->description = $this->get_option('description');
+            $this->order_states = $this->get_option('order_states');
+
             $this->network = $this->get_option('globee_network');
-            $this->payment_api_key = $this->get_option('globee_payment_api_key');
+            $this->payment_api_key = $this->get_option('payment_api_key');
 
             // Save settings
             add_action('woocommerce_update_options_payment_gateways_' . $this->id, [$this, 'process_admin_options']);
@@ -80,7 +97,7 @@ function globee_woocommerce_init()
                     'default' => 'yes'
                 ],
                 'title' => [
-                    'title' => __('GloBee.com', 'globee'),
+                    'title' => __('Title', 'globee'),
                     'type' => 'text',
                     'description' => __('The name users will see on the checkout page', 'globee'),
                     'default' => __( 'GloBee.com', 'globee'),
@@ -114,6 +131,9 @@ function globee_woocommerce_init()
                     ],
                     'desc_tip' => true,
                 ],
+                'order_states' => array(
+                    'type' => 'order_states'
+                ),
                 'transaction_speed' => [
                     'title' => __('Transaction Speed', 'globee'),
                     'type' => 'select',
@@ -154,7 +174,7 @@ function globee_woocommerce_init()
                             . 'you for using GloBee!', 'globee'),
                         get_option('globee_woocommerce_version', '1.0.0'),
                         PHP_MAJOR_VERSION . '.' . PHP_MINOR_VERSION
-                   ),
+                    ),
                 ],
             ];
         }
@@ -306,7 +326,11 @@ function globee_woocommerce_init()
             // Redirect URL & Notification URL
             $redirectUrl = $this->get_option('redirect_url', $this->get_return_url($order));
 
-            $connector = new \GloBee\PaymentApi\Connectors\GloBeeCurlConnector($this->payment_api_key);
+            $address = 'https://globee.com/payment-api';
+            if ($this->get_option('network') === 'testnet') {
+                $address = 'https://test.globee.com/payment-api';
+            }
+            $connector = new \GloBee\PaymentApi\Connectors\GloBeeCurlConnector($this->payment_api_key, $address, ['WooCommerce']);
             $paymentApi = new \GloBee\PaymentApi\PaymentApi($connector);
             $paymentRequest = new \GloBee\PaymentApi\Models\PaymentRequest();
             $paymentRequest->setSuccessUrl($this->get_option('redirect_url', $this->get_return_url()));
@@ -314,101 +338,15 @@ function globee_woocommerce_init()
             $paymentRequest->setCurrency(get_woocommerce_currency());
             $paymentRequest->setConfirmationSpeed($this->get_option('transaction_speed', 'medium'));
             $paymentRequest->setTotal($order->calculate_totals());
-            $paymentRequest->setCustomerEmail('example@email.com');
+            $paymentRequest->setCustomerEmail($order->get_billing_email());
 
             $response = $paymentApi->createPaymentRequest($paymentRequest);
 
             $paymentRequestId = $response->getId(); // Save this ID to know when payment has been made
             $redirectUrl = $response->getRedirectUrl(); // Redirect your client to this URL to make payment
 
-
-
-
-
-
-            // Setup the currency
-            $currency = new \globee\Currency();
-            if (false === isset($currency) && true === empty($currency)) {
-                throw new \Exception('The GloBee payment plugin was called to process a payment but could not '
-                    . 'instantiate a Currency object. Cannot continue!');
-            }
-
-            // Get a globee Client to prepare for invoice creation
-            $client = new \globee\Client\Client();
-
-            if (false === isset($client) && true === empty($client)) {
-                throw new \Exception('The GloBee payment plugin was called to process a payment but could not '
-                    . 'instantiate a client object. Cannot continue!');
-            }
-
-            if ('livenet' === $this->api_network) {
-                $client->setNetwork(new \globee\Network\Livenet());
-            } else {
-                $client->setNetwork(new \globee\Network\Testnet());
-            }
-
-            $curlAdapter = new \globee\Client\Adapter\CurlAdapter();
-
-            if (false === isset($curlAdapter) || true === empty($curlAdapter)) {
-                throw new \Exception('The GloBee payment plugin was called to process a payment but could not '
-                    . 'instantiate a CurlAdapter object. Cannot continue!');
-            }
-
-            $client->setAdapter($curlAdapter);
-
-
-            // Setup the Invoice
-            $invoice = new \globee\Invoice();
-
-            if (false === isset($invoice) || true === empty($invoice)) {
-                throw new \Exception('The GloBee payment plugin was called to process a payment but could not '
-                    . 'instantiate an Invoice object. Cannot continue!');
-            }
-
-            $order_number = $order->get_order_number();
-            $invoice->setOrderId((string)$order_number);
-            $invoice->setCurrency($currency);
-            $invoice->setFullNotifications(true);
-
-            // Add a priced item to the invoice
-            $item = new \globee\Item();
-
-            if (false === isset($item) || true === empty($item)) {
-                throw new \Exception('The GloBee payment plugin was called to process a payment but could not '
-                    . 'instantiate an item object. Cannot continue!');
-            }
-
-            $order_total = $order->calculate_totals();
-            if (true === isset($order_total) && false === empty($order_total)) {
-                $item->setPrice($order_total);
-            } else {
-                throw new \Exception('The GloBee payment plugin was called to process a payment but could not '
-                    . 'set item->setPrice to $order->calculate_totals(). The empty() check failed!');
-            }
-
-            $invoice->setItem($item);
-
-            // Add the Redirect and Notification URLs
-            $invoice->setRedirectUrl($redirectUrl);
-            $invoice->setNotificationUrl($notificationUrl);
-            $invoice->setTransactionSpeed($this->transaction_speed);
-
-            try {
-                $invoice = $client->createInvoice($invoice);
-                if (false === isset($invoice) || true === empty($invoice)) {
-                    throw new \Exception('The GloBee payment plugin was called to process a payment but could '
-                        . 'not instantiate an invoice object. Cannot continue!');
-                }
-            } catch (\Exception $e) {
-                error_log($e->getMessage());
-                return array(
-                    'result'    => 'success',
-                    'messages'  => 'Sorry, but Bitcoin checkout with GloBee does not appear to be working.'
-               );
-            }
-
-            // Reduce stock levels
-            $order->reduce_order_stock();
+            // Redurce order stock
+            wc_reduce_stock_levels($orderId);
 
             // Remove cart
             WC()->cart->empty_cart();
@@ -416,7 +354,7 @@ function globee_woocommerce_init()
             // Redirect the customer to the globee invoice
             return [
                 'result'   => 'success',
-                'redirect' => $invoice->getUrl(),
+                'redirect' => $redirectUrl,
             ];
         }
 
@@ -553,7 +491,7 @@ function globee_woocommerce_init()
                         $current_status == $complete_status ||
                         'wc_'.$current_status == $complete_status ||
                         $current_status == 'completed'
-                   )) {
+                    )) {
                         $order->update_status($paid_status);
                         $order->add_order_note(__('GloBee invoice paid. Awaiting network confirmation and payment '
                             . 'completed status.', 'globee'));
@@ -566,7 +504,7 @@ function globee_woocommerce_init()
                         $current_status == $complete_status ||
                         'wc_'.$current_status == $complete_status ||
                         $current_status == 'completed'
-                   )) {
+                    )) {
                         $order->update_status($confirmed_status);
                         $order->add_order_note(__('GloBee invoice confirmed. Awaiting payment completed status.',
                             'globee'));
@@ -579,7 +517,7 @@ function globee_woocommerce_init()
                         $current_status == $complete_status ||
                         'wc_'.$current_status == $complete_status ||
                         $current_status == 'completed'
-                   )) {
+                    )) {
                         $order->payment_complete();
                         $order->update_status($complete_status);
                         $order->add_order_note(__('GloBee invoice payment completed. Payment credited to your merchant '
@@ -592,7 +530,7 @@ function globee_woocommerce_init()
                         $current_status == $complete_status ||
                         'wc_'.$current_status == $complete_status ||
                         $current_status == 'completed'
-                   )) {
+                    )) {
                         $order->update_status($invalid_status, __('Bitcoin payment is invalid for this order! The '
                             . 'payment was not confirmed by the network within 1 hour. Do not ship the product for '
                             . 'this order!', 'globee'));

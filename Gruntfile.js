@@ -47,7 +47,7 @@ module.exports = function(grunt) {
                     },
                     {
                         expand: true,
-                        cwd: 'vendor/paybee/php-client/src/',
+                        cwd: 'vendor/globee/payment-api/src/',
                         src: [
                             '**/**.*'
                         ],

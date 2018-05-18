@@ -40,7 +40,7 @@ module.exports = function(grunt) {
                         src: [
                             '**/**.php',
                             'assets/js/**/**.*',
-                            'assets/img/**/**.*',
+                            'assets/images/**/**.*',
                             'templates/**/**.*'
                         ],
                         dest: 'dist/globee-woocommerce-1.0.0'

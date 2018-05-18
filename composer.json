@@ -18,11 +18,10 @@
         }
     ],
     "require": {
-        "globee/payment-api": "v0.1.0"
+        "globee/payment-api": "v0.2.0"
     },
 	"require-dev": {
         "wp-cli/wp-cli": "*",
-        "fabpot/php-cs-fixer": "@stable",
         "phpunit/phpunit": "~4.8"
 	},
   "minimum-stability": "stable",

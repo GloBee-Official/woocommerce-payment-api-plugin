@@ -6,17 +6,22 @@ Description: Accepts cryptocurrency payments on your WooCommerce Shop using GloB
 Version: 1.0.0
 Author: GloBee
 Author URI: https://globee.com/
+
+License:           Copyright 2016-2017 GloBee., MIT License
+License URI:       https://github.com/globee/woocommerce-payment-api-plugin/blob/master/LICENSE
+GitHub Plugin URI: https://github.com/globee/woocommerce-payment-api-plugin
 */
 
 if (false === defined('ABSPATH')) {
     exit;
 }
 
-add_action('plugins_loaded', 'woocommerce_globee_init', 0);
+add_action('plugins_loaded', 'globee_woocommerce_init', 0);
+register_activation_hook(__FILE__, 'globee_woocommerce_activate');
 
-function woocommerce_globee_init()
+function globee_woocommerce_init()
 {
-    if (true === class_exists('WC_Gateway_Bitpay')) {
+    if (true === class_exists('WC_Gateway_globee')) {
         return;
     }
 
@@ -37,19 +42,27 @@ function woocommerce_globee_init()
         public function __construct()
         {
             $this->id = 'globee';
+            $this->title = 'GloBee';
             $this->icon = plugin_dir_url(__FILE__).'assets/images/icon.png';
             $this->has_fields = false;
             $this->method_title = 'GloBee';
-            $this->method_description = 'GloBee allows you to accept cryptocurrency payments on your WooCommerce store.';
+            $this->method_description = 'GloBee allows you to accept cryptocurrency payments on your WooCommerce store';
             $this->order_button_text  = __('Proceed to GloBee', 'globee');
 
             $this->init_form_fields();
             $this->init_settings();
 
-            $this->globee_net = $this->get_option('globee_net');
+            $this->network = $this->get_option('globee_network');
             $this->payment_api_key = $this->get_option('globee_payment_api_key');
 
-            add_action( 'woocommerce_update_options_payment_gateways_' . $this->id, array( $this, 'process_admin_options' ) );
+            // Save settings
+            add_action('woocommerce_update_options_payment_gateways_' . $this->id, [$this, 'process_admin_options']);
+
+            // Save Order States
+            add_action('woocommerce_update_options_payment_gateways_' . $this->id, [$this, 'save_order_states']);
+
+            // Save IPN Callback
+            add_action('woocommerce_api_wc_gateway_globee', [$this, 'ipn_callback']);
         }
 
         public function __destruct()
@@ -59,365 +72,297 @@ function woocommerce_globee_init()
 
         public function init_form_fields()
         {
-            $this->form_fields = array(
-                'enabled' => array(
-                    'title' => __( 'Enable/Disable', 'globee' ),
+            $this->form_fields = [
+                'enabled' => [
+                    'title' => __('Enable GloBee', 'globee'),
                     'type' => 'checkbox',
-                    'label' => __( 'Enable GloBee Payment Gateway', 'globee' ),
+                    'label' => __('Enable users to select GloBee as a payment option on the checkout page', 'globee'),
                     'default' => 'yes'
-                ),
-                'title' => array(
-                    'title' => __( 'Title', 'globee' ),
+                ],
+                'title' => [
+                    'title' => __('GloBee.com', 'globee'),
                     'type' => 'text',
-                    'description' => __( 'GloBee Cryptocurrency Payment Gateway', 'globee' ),
-                    'default' => __( 'GloBee', 'globee' ),
-                    'desc_tip' => false,
-                ),
-                'description' => array(
+                    'description' => __('The name users will see on the checkout page', 'globee'),
+                    'default' => __( 'GloBee.com', 'globee'),
+                    'desc_tip' => true,
+                ],
+                'description' => [
                     'title' => __('Customer Message', 'globee'),
                     'type' => 'textarea',
-                    'description' => __('GloBee Cryptocurrency Payment Gateway', 'globee'),
-                    'default' => 'You will be redirected to GloBee to complete your purchase.',
-                    'desc_tip' => false,
-                ),
-                'token' => array(
-                    'title' => __('Payment API Token', 'globee'),
-                    'type' => 'api_token',
-                    'description' => __('GloBee Cryptocurrency Payment Gateway', 'globee'),
-                    'default' => 'Your Payment API Token',
-                    'desc_tip' => false,
-                ),
-                'transaction_speed' => array(
+                    'description' => __('The message explaining to the user what will happen, after selecting GloBee as'
+                        . ' their payment option', 'globee'),
+                    'default' => 'You will be redirected to GloBee.com to complete your purchase.',
+                    'desc_tip' => true,
+                ],
+                'payment_api_key' => [
+                    'title' => __('Payment API Key', 'globee'),
+                    'type' => 'text',
+                    'description' => __('Your Payment API Key. You can find this key on the Payment API page of your '
+                        . 'account on globee.com', 'globee'),
+                    'default' => $this->payment_api_key,
+                    'desc_tip' => true,
+                ],
+                'network' => [
+                    'title' => __('Network', 'globee'),
+                    'type' => 'select',
+                    'description' => __('Choose if you want to use the GloBee Livenet or Testnet. Testnet is for '
+                        . 'testing purposes and require a api key from the test system.', 'globee'),
+                    'default' => 'livenet',
+                    'options' => [
+                        'livenet' => 'Livenet',
+                        'testnet' => 'Testnet',
+                    ],
+                    'desc_tip' => true,
+                ],
+                'transaction_speed' => [
                     'title' => __('Transaction Speed', 'globee'),
                     'type' => 'select',
-                    'description' => __('Choose your preferred transaction speed. View your Settlement Settings page on GloBee for more details.', 'globee'),
+                    'description' => __('Choose your preferred transaction speed. View your Settlement Settings page '
+                        . 'on GloBee for more details.', 'globee'),
                     'default' => 'medium',
-                    'options' => array(
+                    'options' => [
                         'high' => 'High',
                         'medium' => 'Medium',
                         'low' => 'Low',
-                    ),
+                    ],
                     'desc_tip' => true,
-                ),
-                'notification_url' => array(
+                ],
+                'notification_url' => [
                     'title' => __('Notification URL', 'globee'),
                     'type' => 'url',
-                    'description' => __('GloBee will send IPNs for orders to this URL with the GloBee payment request data', 'globee'),
-                    'default' => '',
+                    'description' => __('GloBee will send IPNs for orders to this URL with the GloBee payment request '
+                        . 'data', 'globee'),
+                    'default' => WC()->api_request_url('WC_Gateway_GloBee'),
                     'placeholder' => WC()->api_request_url('WC_Gateway_GloBee'),
                     'desc_tip' => true,
-                ),
-                'redirect_url' => array(
+                ],
+                'redirect_url' => [
                     'title' => __('Redirect URL', 'globee'),
                     'type' => 'url',
-                    'description' => __('After paying the GloBee invoice, users will be redirected back to this URL', 'globee'),
-                    'default' => '',
+                    'description' => __('After paying the GloBee invoice, users will be redirected back to this URL',
+                        'globee'),
+                    'default' => $this->get_return_url(),
                     'placeholder' => $this->get_return_url(),
                     'desc_tip' => true,
-                ),
-                'cancel_url' => array(
-                    'title' => __('Cancel URL', 'globee'),
-                    'type' => 'url',
-                    'description' => __('After paying the GloBee invoice, users will be redirected back to this URL', 'globee'),
-                    'default' => '',
-                    'placeholder' => $this->get_return_url(),
-                    'desc_tip' => true,
-                ),
-                'support_details' => array(
-                    'title' => __( 'Plugin & Support Information', 'globee' ),
+                ],
+                'support_details' => [
+                    'title' => __('Support & Version Information', 'globee'),
                     'type' => 'title',
                     'description' => sprintf(
-                        __('This plugin version is %s and your PHP version is %s. If you need assistance, please contact support@globee.com. Thank you for using GloBee!', 'globee'),
-                        get_option('woocommerce_bitpay_version'),
+                        __('<b>Versions</b><br/>Plugin version: %s<br/>PHP version: %s<br/><br/><b>Support</b><br/>If '
+                            . 'you need assistance, please contact support@globee.com with your version numbers. Thank '
+                            . 'you for using GloBee!', 'globee'),
+                        get_option('globee_woocommerce_version', '1.0.0'),
                         PHP_MAJOR_VERSION . '.' . PHP_MINOR_VERSION
-                    ),
-                ),
-            );
+                   ),
+                ],
+            ];
         }
-
-        public function generate_payment_api_key_html()
-        {
-            ob_start();
-            wp_enqueue_style('globee-key', plugins_url('assets/css/style.css', __FILE__));
-            wp_enqueue_script('globee-pairing', plugins_url('assets/js/pairing.js', __FILE__), array('jquery'), null, true);
-            wp_localize_script('globee-pairing', 'GloBeeAjax', array(
-                'ajaxurl' => admin_url('admin-ajax.php'),
-                'pairNonce' => wp_create_nonce('globee-pair-nonce'),
-                'revokeNonce' => wp_create_nonce('globee-revoke-nonce')
-            ));
-            ?>
-            <tr valign="top">
-                <th scope="row" class="titledesc">GloBee Payment API</th>
-                <td class="forminp" id="globee_api_key">
-                    <div id="globee_api_key_form">
-                        <div class="globee-token globee-token-%s">
-                            <header class="globee-token-header">
-                                <div class="globee-token-logo"><img src="<?= plugins_url('assets/images/logo.png', __FILE__); ?>"></div>
-                                <button class="globee-token-revoke fa fa-ban"></button>
-                            </header>
-                            <div class="globee-token-prop"><span class="globee-token-label">Key:</span> <?= $this->payment_api_key; ?></div>
-                        </div>
-                    </div>
-                    <script type="text/javascript">
-                        var ajax_loader_url = '<?= plugins_url('assets/images/ajax-loader.gif', __FILE__); ?>';
-                    </script>
-                </td>
-            </tr>
-            <?php
-
-            return ob_get_clean();
-        }
-
-        # REWRITE THE FOLLOWING ########################################################################################
 
         public function generate_order_states_html()
         {
-            $this->log('    [Info] Entered generate_order_states_html()...');
-
             ob_start();
 
-            $bp_statuses = array('new'=>'New Order', 'paid'=>'Paid', 'confirmed'=>'Confirmed', 'complete'=>'Complete', 'invalid'=>'Invalid');
-            $df_statuses = array('new'=>'wc-on-hold', 'paid'=>'wc-processing', 'confirmed'=>'wc-processing', 'complete'=>'wc-completed', 'invalid'=>'wc-failed');
+            $globeeStatuses = [
+                'new' => 'New Order',
+                'paid' => 'Paid',
+                'confirmed' => 'Confirmed',
+                'complete' => 'Complete',
+                'invalid' => 'Invalid'
+            ];
 
-            $wc_statuses = wc_get_order_statuses();
+            $statuses = [
+                'new' => 'wc-on-hold',
+                'paid' => 'wc-processing',
+                'confirmed' => 'wc-processing',
+                'complete' => 'wc-completed',
+                'invalid' => 'wc-failed'
+            ];
+
+            $wcStatuses = wc_get_order_statuses();
 
             ?>
             <tr valign="top">
                 <th scope="row" class="titledesc">Order States:</th>
-                <td class="forminp" id="bitpay_order_states">
+                <td class="forminp" id="globee_order_states">
                     <table cellspacing="0">
-                        <?php
-
-                        foreach ($bp_statuses as $bp_state => $bp_name) {
-                            ?>
+                        <?php foreach ($globeeStatuses as $globeeState => $globeeName) { ?>
                             <tr>
-                                <th><?php echo $bp_name; ?></th>
+                                <th><?php echo $globeeName; ?></th>
                                 <td>
-                                    <select name="woocommerce_bitpay_order_states[<?php echo $bp_state; ?>]">
+                                    <select name="globee_woocommerce_order_states[<?php echo $globeeState; ?>]">
                                         <?php
-
-                                        $order_states = get_option('woocommerce_bitpay_settings');
-                                        $order_states = $order_states['order_states'];
-                                        foreach ($wc_statuses as $wc_state => $wc_name) {
-                                            $current_option = $order_states[$bp_state];
-
-                                            if (true === empty($current_option)) {
-                                                $current_option = $df_statuses[$bp_state];
+                                        $orderStates = get_option('globee_woocommerce_settings')['order_states'];
+                                        foreach ($wcStatuses as $wcState => $wcName) {
+                                            $currentOption = $orderStates[$globeeState];
+                                            if (true === empty($currentOption)) {
+                                                $currentOption = $statuses[$globeeState];
                                             }
-
-                                            if ($current_option === $wc_state) {
-                                                echo "<option value=\"$wc_state\" selected>$wc_name</option>\n";
-                                            } else {
-                                                echo "<option value=\"$wc_state\">$wc_name</option>\n";
+                                            echo "<option value='$wcState'";
+                                            if ($currentOption === $wcState) {
+                                                echo "selected";
                                             }
-                                        }
-
-                                        ?>
+                                            echo ">$wcName</option>\n";
+                                        } ?>
                                     </select>
                                 </td>
                             </tr>
-                            <?php
-                        }
-
-                        ?>
+                        <?php } ?>
                     </table>
                 </td>
             </tr>
             <?php
-
-            $this->log('    [Info] Leaving generate_order_states_html()...');
 
             return ob_get_clean();
         }
 
         public function save_order_states()
         {
-            $this->log('    [Info] Entered save_order_states()...');
-
-            $bp_statuses = array(
-                'new'      => 'New Order',
-                'paid'      => 'Paid',
+            $globeeStatuses = [
+                'new' => 'New Order',
+                'paid' => 'Paid',
                 'confirmed' => 'Confirmed',
-                'complete'  => 'Complete',
-                'invalid'   => 'Invalid',
-            );
+                'complete' => 'Complete',
+                'invalid' => 'Invalid',
+            ];
 
-            $wc_statuses = wc_get_order_statuses();
+            $wcStatuses = wc_get_order_statuses();
 
-            if (true === isset($_POST['woocommerce_bitpay_order_states'])) {
-
-                $bp_settings = get_option('woocommerce_bitpay_settings');
-                $order_states = $bp_settings['order_states'];
-
-                foreach ($bp_statuses as $bp_state => $bp_name) {
-                    if (false === isset($_POST['woocommerce_bitpay_order_states'][ $bp_state ])) {
+            if (true === isset($_POST['globee_woocommerce_order_states'])) {
+                $settings = get_option('globee_woocommerce_settings');
+                $orderStates = $settings['order_states'];
+                foreach ($globeeStatuses as $globeeState => $globeeName) {
+                    if (false === isset($_POST['globee_woocommerce_order_states'][$globeeState])) {
                         continue;
                     }
-
-                    $wc_state = $_POST['woocommerce_bitpay_order_states'][ $bp_state ];
-
-                    if (true === array_key_exists($wc_state, $wc_statuses)) {
-                        $this->log('    [Info] Updating order state ' . $bp_state . ' to ' . $wc_state);
-                        $order_states[$bp_state] = $wc_state;
+                    $wcState = $_POST['globee_woocommerce_order_states'][$globeeState];
+                    if (true === array_key_exists($wcState, $wcStatuses)) {
+                        $orderStates[$globeeState] = $wcState;
                     }
-
                 }
-                $bp_settings['order_states'] = $order_states;
-                update_option('woocommerce_bitpay_settings', $bp_settings);
+                $settings['order_states'] = $orderStates;
+                update_option('globee_woocommerce_settings', $settings);
             }
-
-            $this->log('    [Info] Leaving save_order_states()...');
         }
 
         public function validate_order_states_field()
         {
-            $order_states = $this->get_option('order_states');
-
-            if ( isset( $_POST[ $this->plugin_id . $this->id . '_order_states' ] ) ) {
-                $order_states = $_POST[ $this->plugin_id . $this->id . '_order_states' ];
+            $orderStates = $this->get_option('order_states');
+            if (isset($_POST[$this->id.$this->plugin_id.'_order_states'])) {
+                $orderStates = $_POST[$this->id.$this->plugin_id.'_order_states'];
             }
-            return $order_states;
+            return $orderStates;
         }
 
         public function validate_url_field($key)
         {
             $url = $this->get_option($key);
-
-            if ( isset( $_POST[ $this->plugin_id . $this->id . '_' . $key ] ) ) {
-                if (filter_var($_POST[ $this->plugin_id . $this->id . '_' . $key ], FILTER_VALIDATE_URL) !== false) {
-                    $url = $_POST[ $this->plugin_id . $this->id . '_' . $key ];
-                } else {
-                    $url = '';
+            if (isset($_POST[$this->id.$this->plugin_id.'_'.$key])) {
+                if (filter_var($_POST[$this->id.$this->plugin_id.'_'.$key],FILTER_VALIDATE_URL) !== false) {
+                    return $_POST[$this->id.$this->plugin_id.'_'.$key];
                 }
+                return '';
             }
             return $url;
         }
 
         public function validate_redirect_url_field()
         {
-            $redirect_url = $this->get_option('redirect_url', '');
-
-            if ( isset( $_POST['woocommerce_bitpay_redirect_url'] ) ) {
-                if (filter_var($_POST['woocommerce_bitpay_redirect_url'], FILTER_VALIDATE_URL) !== false) {
-                    $redirect_url = $_POST['woocommerce_bitpay_redirect_url'];
-                } else {
-                    $redirect_url = '';
+            $redirectUrl = $this->get_option('redirect_url', '');
+            if ( isset($_POST['globee_woocommerce_redirect_url'])) {
+                if (filter_var($_POST['globee_woocommerce_redirect_url'],FILTER_VALIDATE_URL) !== false) {
+                    return $_POST['globee_woocommerce_redirect_url'];
                 }
+                return '';
             }
-            return $redirect_url;
+            return $redirectUrl;
         }
 
-        public function thankyou_page($order_id)
+        public function thankyou_page($orderId)
         {
-            $this->log('    [Info] Entered thankyou_page with order_id =  ' . $order_id);
-
-            // Intentionally blank.
-
-            $this->log('    [Info] Leaving thankyou_page with order_id =  ' . $order_id);
+            // Do something here if you want to customize the return url page
         }
 
-        public function process_payment($order_id)
-        {
-            $this->log('    [Info] Entered process_payment() with order_id = ' . $order_id . '...');
+        # REWRITE THE FOLLOWING ########################################################################################
 
-            if (true === empty($order_id)) {
-                $this->log('    [Error] The GloBee payment plugin was called to process a payment but the order_id was missing.');
-                throw new \Exception('The GloBee payment plugin was called to process a payment but the order_id was missing. Cannot continue!');
+        public function process_payment($orderId)
+        {
+            if (true === empty($orderId)) {
+                throw new \Exception('The GloBee payment plugin was called to process a payment but the '
+                    . 'orderId was missing. Cannot continue!');
             }
 
-            $order = wc_get_order($order_id);
+            $order = wc_get_order($orderId);
 
             if (false === $order) {
-                $this->log('    [Error] The GloBee payment plugin was called to process a payment but could not retrieve the order details for order_id ' . $order_id);
-                throw new \Exception('The GloBee payment plugin was called to process a payment but could not retrieve the order details for order_id ' . $order_id . '. Cannot continue!');
+                throw new \Exception('The GloBee payment plugin was called to process a payment but could '
+                    . 'not retrieve the order details for order_id ' . $orderId . '. Cannot continue!');
             }
-
-            $notification_url = $this->get_option('notification_url', WC()->api_request_url('WC_Gateway_Bitpay'));
-            $this->log('    [Info] Generating payment form for order ' . $order->get_order_number() . '. Notify URL: ' . $notification_url);
 
             // Mark new order according to user settings (we're awaiting the payment)
-            $new_order_states = $this->get_option('order_states');
-            $new_order_status = $new_order_states['new'];
-            $order->update_status($new_order_status, 'Awaiting payment notification from GloBee.');
-
-            $thanks_link = $this->get_return_url($order);
-
-            $this->log('    [Info] The variable thanks_link = ' . $thanks_link . '...');
+            $newOrderStatus = $this->get_option('order_states')['new'];
+            $order->update_status($newOrderStatus, 'Awaiting payment notification from GloBee.');
 
             // Redirect URL & Notification URL
-            $redirect_url = $this->get_option('redirect_url', $thanks_link);
-            $this->log('    [Info] The variable redirect_url = ' . $redirect_url  . '...');
+            $redirectUrl = $this->get_option('redirect_url', $this->get_return_url($order));
 
-            $this->log('    [Info] Notification URL is now set to: ' . $notification_url . '...');
+            $connector = new \GloBee\PaymentApi\Connectors\GloBeeCurlConnector($this->payment_api_key);
+            $paymentApi = new \GloBee\PaymentApi\PaymentApi($connector);
+            $paymentRequest = new \GloBee\PaymentApi\Models\PaymentRequest();
+            $paymentRequest->setSuccessUrl($this->get_option('redirect_url', $this->get_return_url()));
+            $paymentRequest->setIpnUrl($this->get_option('notification_url', WC()->api_request_url('WC_Gateway_globee')));
+            $paymentRequest->setCurrency(get_woocommerce_currency());
+            $paymentRequest->setConfirmationSpeed($this->get_option('transaction_speed', 'medium'));
+            $paymentRequest->setTotal($order->calculate_totals());
+            $paymentRequest->setCustomerEmail('example@email.com');
+
+            $response = $paymentApi->createPaymentRequest($paymentRequest);
+
+            $paymentRequestId = $response->getId(); // Save this ID to know when payment has been made
+            $redirectUrl = $response->getRedirectUrl(); // Redirect your client to this URL to make payment
+
+
+
+
+
 
             // Setup the currency
-            $currency_code = get_woocommerce_currency();
-
-            $this->log('    [Info] The variable currency_code = ' . $currency_code . '...');
-
-            $currency = new \Bitpay\Currency($currency_code);
-
+            $currency = new \globee\Currency();
             if (false === isset($currency) && true === empty($currency)) {
-                $this->log('    [Error] The GloBee payment plugin was called to process a payment but could not instantiate a Currency object.');
-                throw new \Exception('The GloBee payment plugin was called to process a payment but could not instantiate a Currency object. Cannot continue!');
+                throw new \Exception('The GloBee payment plugin was called to process a payment but could not '
+                    . 'instantiate a Currency object. Cannot continue!');
             }
 
-            // Get a BitPay Client to prepare for invoice creation
-            $client = new \Bitpay\Client\Client();
+            // Get a globee Client to prepare for invoice creation
+            $client = new \globee\Client\Client();
 
             if (false === isset($client) && true === empty($client)) {
-                $this->log('    [Error] The GloBee payment plugin was called to process a payment but could not instantiate a client object.');
-                throw new \Exception('The GloBee payment plugin was called to process a payment but could not instantiate a client object. Cannot continue!');
+                throw new \Exception('The GloBee payment plugin was called to process a payment but could not '
+                    . 'instantiate a client object. Cannot continue!');
             }
 
             if ('livenet' === $this->api_network) {
-                $client->setNetwork(new \Bitpay\Network\Livenet());
-                $this->log('    [Info] Set network to Livenet...');
+                $client->setNetwork(new \globee\Network\Livenet());
             } else {
-                $client->setNetwork(new \Bitpay\Network\Testnet());
-                $this->log('    [Info] Set network to Testnet...');
+                $client->setNetwork(new \globee\Network\Testnet());
             }
 
-            $curlAdapter = new \Bitpay\Client\Adapter\CurlAdapter();
+            $curlAdapter = new \globee\Client\Adapter\CurlAdapter();
 
             if (false === isset($curlAdapter) || true === empty($curlAdapter)) {
-                $this->log('    [Error] The GloBee payment plugin was called to process a payment but could not instantiate a CurlAdapter object.');
-                throw new \Exception('The GloBee payment plugin was called to process a payment but could not instantiate a CurlAdapter object. Cannot continue!');
+                throw new \Exception('The GloBee payment plugin was called to process a payment but could not '
+                    . 'instantiate a CurlAdapter object. Cannot continue!');
             }
 
             $client->setAdapter($curlAdapter);
 
-            if (false === empty($this->api_key)) {
-                $client->setPrivateKey($this->api_key);
-            } else {
-                $this->log('    [Error] The GloBee payment plugin was called to process a payment but could not set client->setPrivateKey to this->api_key. The empty() check failed!');
-                throw new \Exception(' The GloBee payment plugin was called to process a payment but could not set client->setPrivateKey to this->api_key. The empty() check failed!');
-            }
-
-            if (false === empty($this->api_pub)) {
-                $client->setPublicKey($this->api_pub);
-            } else {
-                $this->log('    [Error] The GloBee payment plugin was called to process a payment but could not set client->setPublicKey to this->api_pub. The empty() check failed!');
-                throw new \Exception(' The GloBee payment plugin was called to process a payment but could not set client->setPublicKey to this->api_pub. The empty() check failed!');
-            }
-
-            if (false === empty($this->api_key)) {
-                $client->setToken($this->api_key);
-            } else {
-                $this->log('    [Error] The GloBee payment plugin was called to process a payment but could not set client->setToken to this->api_key. The empty() check failed!');
-                throw new \Exception(' The GloBee payment plugin was called to process a payment but could not set client->setToken to this->api_key. The empty() check failed!');
-            }
-
-            $this->log('    [Info] Key and key empty checks passed.  Parameters in client set accordingly...');
 
             // Setup the Invoice
-            $invoice = new \Bitpay\Invoice();
+            $invoice = new \globee\Invoice();
 
             if (false === isset($invoice) || true === empty($invoice)) {
-                $this->log('    [Error] The GloBee payment plugin was called to process a payment but could not instantiate an Invoice object.');
-                throw new \Exception('The GloBee payment plugin was called to process a payment but could not instantiate an Invoice object. Cannot continue!');
-            } else {
-                $this->log('    [Info] Invoice object created successfully...');
+                throw new \Exception('The GloBee payment plugin was called to process a payment but could not '
+                    . 'instantiate an Invoice object. Cannot continue!');
             }
 
             $order_number = $order->get_order_number();
@@ -426,49 +371,40 @@ function woocommerce_globee_init()
             $invoice->setFullNotifications(true);
 
             // Add a priced item to the invoice
-            $item = new \Bitpay\Item();
+            $item = new \globee\Item();
 
             if (false === isset($item) || true === empty($item)) {
-                $this->log('    [Error] The GloBee payment plugin was called to process a payment but could not instantiate an item object.');
-                throw new \Exception('The GloBee payment plugin was called to process a payment but could not instantiate an item object. Cannot continue!');
-            } else {
-                $this->log('    [Info] Item object created successfully...');
+                throw new \Exception('The GloBee payment plugin was called to process a payment but could not '
+                    . 'instantiate an item object. Cannot continue!');
             }
 
             $order_total = $order->calculate_totals();
             if (true === isset($order_total) && false === empty($order_total)) {
                 $item->setPrice($order_total);
             } else {
-                $this->log('    [Error] The GloBee payment plugin was called to process a payment but could not set item->setPrice to $order->calculate_totals(). The empty() check failed!');
-                throw new \Exception('The GloBee payment plugin was called to process a payment but could not set item->setPrice to $order->calculate_totals(). The empty() check failed!');
+                throw new \Exception('The GloBee payment plugin was called to process a payment but could not '
+                    . 'set item->setPrice to $order->calculate_totals(). The empty() check failed!');
             }
 
             $invoice->setItem($item);
 
             // Add the Redirect and Notification URLs
-            $invoice->setRedirectUrl($redirect_url);
-            $invoice->setNotificationUrl($notification_url);
+            $invoice->setRedirectUrl($redirectUrl);
+            $invoice->setNotificationUrl($notificationUrl);
             $invoice->setTransactionSpeed($this->transaction_speed);
 
             try {
-                $this->log('    [Info] Attempting to generate invoice for ' . $order->get_order_number() . '...');
-
                 $invoice = $client->createInvoice($invoice);
-
                 if (false === isset($invoice) || true === empty($invoice)) {
-                    $this->log('    [Error] The GloBee payment plugin was called to process a payment but could not instantiate an invoice object.');
-                    throw new \Exception('The GloBee payment plugin was called to process a payment but could not instantiate an invoice object. Cannot continue!');
-                } else {
-                    $this->log('    [Info] Call to generate invoice was successful: ' . $client->getResponse()->getBody());
+                    throw new \Exception('The GloBee payment plugin was called to process a payment but could '
+                        . 'not instantiate an invoice object. Cannot continue!');
                 }
             } catch (\Exception $e) {
-                $this->log('    [Error] Error generating invoice for ' . $order->get_order_number() . ', "' . $e->getMessage() . '"');
                 error_log($e->getMessage());
-
                 return array(
                     'result'    => 'success',
                     'messages'  => 'Sorry, but Bitcoin checkout with GloBee does not appear to be working.'
-                );
+               );
             }
 
             // Reduce stock levels
@@ -477,286 +413,192 @@ function woocommerce_globee_init()
             // Remove cart
             WC()->cart->empty_cart();
 
-            $this->log('    [Info] Leaving process_payment()...');
-
-            // Redirect the customer to the BitPay invoice
-            return array(
+            // Redirect the customer to the globee invoice
+            return [
                 'result'   => 'success',
                 'redirect' => $invoice->getUrl(),
-            );
+            ];
         }
 
         public function ipn_callback()
         {
-            $this->log('    [Info] Entered ipn_callback()...');
-
             // Retrieve the Invoice ID and Network URL from the supposed IPN data
             $post = file_get_contents("php://input");
 
             if (true === empty($post)) {
-                $this->log('    [Error] No post data sent to IPN handler!');
                 error_log('[Error] GloBee plugin received empty POST data for an IPN message.');
-
                 wp_die('No post data');
-            } else {
-                $this->log('    [Info] The post data sent to IPN handler is present...');
             }
 
             $json = json_decode($post, true);
 
             if (true === empty($json)) {
-                $this->log('    [Error] Invalid JSON payload sent to IPN handler: ' . $post);
-                error_log('[Error] GloBee plugin received an invalid JSON payload sent to IPN handler: ' . $post);
-
+                error_log('[Error] GloBee plugin received an invalid JSON payload sent to IPN handler: '
+                    . $post);
                 wp_die('Invalid JSON');
-            } else {
-                $this->log('    [Info] The post data was decoded into JSON...');
             }
 
             if (false === array_key_exists('id', $json)) {
-                $this->log('    [Error] No invoice ID present in JSON payload: ' . var_export($json, true));
-                error_log('[Error] GloBee plugin did not receive an invoice ID present in JSON payload: ' . var_export($json, true));
-
+                error_log('[Error] GloBee plugin did not receive an invoice ID present in JSON payload: '
+                    . var_export($json, true));
                 wp_die('No Invoice ID');
-            } else {
-                $this->log('    [Info] Invoice ID present in JSON payload...');
             }
 
             if (false === array_key_exists('url', $json)) {
-                $this->log('    [Error] No invoice URL present in JSON payload: ' . var_export($json, true));
-                error_log('[Error] GloBee plugin did not receive an invoice URL present in JSON payload: ' . var_export($json, true));
-
+                error_log('[Error] GloBee plugin did not receive an invoice URL present in JSON payload: '
+                    . var_export($json, true));
                 wp_die('No Invoice URL');
-            } else {
-                $this->log('    [Info] Invoice URL present in JSON payload...');
             }
 
-            // Get a BitPay Client to prepare for invoice fetching
-            $client = new \Bitpay\Client\Client();
+            // Get a globee Client to prepare for invoice fetching
+            $client = new \globee\Client\Client();
 
             if (false === isset($client) && true === empty($client)) {
-                $this->log('    [Error] The GloBee payment plugin was called to handle an IPN but could not instantiate a client object.');
-                throw new \Exception('The GloBee payment plugin was called to handle an IPN but could not instantiate a client object. Cannot continue!');
-            } else {
-                $this->log('    [Info] Created new Client object in IPN handler...');
+                throw new \Exception('The GloBee payment plugin was called to handle an IPN but could not '
+                    . 'instantiate a client object. Cannot continue!');
             }
 
             if (false === strpos($json['url'], 'test')) {
-                $network = new \Bitpay\Network\Livenet();
-                $this->log('    [Info] Set network to Livenet.');
+                $network = new \globee\Network\Livenet();
             } else {
-                $network = new \Bitpay\Network\Testnet();
-                $this->log('    [Info] Set network to Testnet.');
+                $network = new \globee\Network\Testnet();
             }
-
-            $this->log('    [Info] Checking IPN response is valid via ' . $network->getName() . '...');
 
             $client->setNetwork($network);
 
-            $curlAdapter = new \Bitpay\Client\Adapter\CurlAdapter();
+            $curlAdapter = new \globee\Client\Adapter\CurlAdapter();
 
             if (false === isset($curlAdapter) && true === empty($curlAdapter)) {
-                $this->log('    [Error] The GloBee payment plugin was called to handle an IPN but could not instantiate a CurlAdapter object.');
-                throw new \Exception('The GloBee payment plugin was called to handle an IPN but could not instantiate a CurlAdapter object. Cannot continue!');
-            } else {
-                $this->log('    [Info] Created new CurlAdapter object in IPN handler...');
+                throw new \Exception('The GloBee payment plugin was called to handle an IPN but could not '
+                    . 'instantiate a CurlAdapter object. Cannot continue!');
             }
 
-            // Setting the Adapter param to a new BitPay CurlAdapter object
+            // Setting the Adapter param to a new globee CurlAdapter object
             $client->setAdapter($curlAdapter);
 
             if (false === empty($this->api_key)) {
                 $client->setPrivateKey($this->api_key);
             } else {
-                $this->log('    [Error] The GloBee payment plugin was called to handle an IPN but could not set client->setPrivateKey to this->api_key. The empty() check failed!');
-                throw new \Exception('The GloBee payment plugin was called to handle an IPN but could not set client->setPrivateKey to this->api_key. The empty() check failed!');
+                throw new \Exception('The GloBee payment plugin was called to handle an IPN but could not '
+                    . 'set client->setPrivateKey to this->api_key. The empty() check failed!');
             }
 
             if (false === empty($this->api_pub)) {
                 $client->setPublicKey($this->api_pub);
             } else {
-                $this->log('    [Error] The GloBee payment plugin was called to handle an IPN but could not set client->setPublicKey to this->api_pub. The empty() check failed!');
-                throw new \Exception('The GloBee payment plugin was called to handle an IPN but could not set client->setPublicKey to this->api_pub. The empty() check failed!');
+                throw new \Exception('The GloBee payment plugin was called to handle an IPN but could not '
+                    . 'set client->setPublicKey to this->api_pub. The empty() check failed!');
             }
 
             if (false === empty($this->api_key)) {
                 $client->setToken($this->api_key);
             } else {
-                $this->log('    [Error] The GloBee payment plugin was called to handle an IPN but could not set client->setToken to this->api_key. The empty() check failed!');
-                throw new \Exception('The GloBee payment plugin was called to handle an IPN but could not set client->setToken to this->api_key. The empty() check failed!');
+                throw new \Exception('The GloBee payment plugin was called to handle an IPN but could not '
+                    . 'set client->setToken to this->api_key. The empty() check failed!');
             }
 
-            $this->log('    [Info] Key and key empty checks passed.  Parameters in client set accordingly...');
-
-            // Fetch the invoice from BitPay's server to update the order
+            // Fetch the invoice from globee's server to update the order
             try {
                 $invoice = $client->getInvoice($json['id']);
-
-                if (true === isset($invoice) && false === empty($invoice)) {
-                    $this->log('    [Info] The IPN check appears to be valid.');
-                } else {
-                    $this->log('    [Error] The IPN check did not pass!');
+                if (!(true === isset($invoice) && false === empty($invoice))) {
                     wp_die('Invalid IPN');
                 }
             } catch (\Exception $e) {
-                $error_string = 'IPN Check: Can\'t find invoice ' . $json['id'];
-                $this->log("    [Error] $error_string");
-                $this->log("    [Error] " . $e->getMessage());
-
                 wp_die($e->getMessage());
             }
 
-            $order_id = $invoice->getOrderId();
+            $orderId = $invoice->getOrderId();
 
-            if (false === isset($order_id) && true === empty($order_id)) {
-                $this->log('    [Error] The GloBee payment plugin was called to process an IPN message but could not obtain the order ID from the invoice.');
-                throw new \Exception('The GloBee payment plugin was called to process an IPN message but could not obtain the order ID from the invoice. Cannot continue!');
-            } else {
-                $this->log('    [Info] Order ID is: ' . $order_id);
+            if (false === isset($orderId) && true === empty($orderId)) {
+                throw new \Exception('The GloBee payment plugin was called to process an IPN message but '
+                    . 'could not obtain the order ID from the invoice. Cannot continue!');
             }
 
             //this is for the basic and advanced woocommerce order numbering plugins
             //if we need to apply other filters, just add them in place of the this one
-            $order_id = apply_filters('woocommerce_order_id_from_number', $order_id);
+            $orderId = apply_filters('woocommerce_order_id_from_number', $orderId);
 
-            $order = wc_get_order($order_id);
+            $order = wc_get_order($orderId);
 
             if (false === $order || 'WC_Order' !== get_class($order)) {
-                $this->log('    [Error] The GloBee payment plugin was called to process an IPN message but could not retrieve the order details for order_id: "' . $order_id . '". If you use an alternative order numbering system, please see class-wc-gateway-bitpay.php to apply a search filter.');
-                throw new \Exception('The GloBee payment plugin was called to process an IPN message but could not retrieve the order details for order_id ' . $order_id . '. Cannot continue!');
-            } else {
-                $this->log('    [Info] Order details retrieved successfully...');
+                throw new \Exception('The GloBee payment plugin was called to process an IPN message but '
+                    . 'could not retrieve the order details for order_id ' . $orderId . '. Cannot continue!');
             }
 
             $current_status = $order->get_status();
 
             if (false === isset($current_status) && true === empty($current_status)) {
-                $this->log('    [Error] The GloBee payment plugin was called to process an IPN message but could not obtain the current status from the order.');
-                throw new \Exception('The GloBee payment plugin was called to process an IPN message but could not obtain the current status from the order. Cannot continue!');
-            } else {
-                $this->log('    [Info] The current order status for this order is ' . $current_status);
+                throw new \Exception('The GloBee payment plugin was called to process an IPN message but '
+                    . 'could not obtain the current status from the order. Cannot continue!');
             }
 
-            $order_states = $this->get_option('order_states');
+            $orderStates = $this->get_option('order_states');
 
-            $new_order_status = $order_states['new'];
-            $paid_status      = $order_states['paid'];
-            $confirmed_status = $order_states['confirmed'];
-            $complete_status  = $order_states['complete'];
-            $invalid_status   = $order_states['invalid'];
+            $newOrderStatus = $orderStates['new'];
+            $paid_status = $orderStates['paid'];
+            $confirmed_status = $orderStates['confirmed'];
+            $complete_status = $orderStates['complete'];
+            $invalid_status = $orderStates['invalid'];
 
             $checkStatus = $invoice->getStatus();
 
             if (false === isset($checkStatus) && true === empty($checkStatus)) {
-                $this->log('    [Error] The GloBee payment plugin was called to process an IPN message but could not obtain the current status from the invoice.');
-                throw new \Exception('The GloBee payment plugin was called to process an IPN message but could not obtain the current status from the invoice. Cannot continue!');
-            } else {
-                $this->log('    [Info] The current order status for this invoice is ' . $checkStatus);
+                throw new \Exception('The GloBee payment plugin was called to process an IPN message but '
+                    . 'could not obtain the current status from the invoice. Cannot continue!');
             }
 
-            // Based on the payment status parameter for this
-            // IPN, we will update the current order status.
             switch ($checkStatus) {
-
-                // The "paid" IPN message is received almost
-                // immediately after the BitPay invoice is paid.
                 case 'paid':
-
-                    $this->log('    [Info] IPN response is a "paid" message.');
-
-                    if ($current_status == $complete_status       ||
+                    if (!(
+                        $current_status == $complete_status ||
                         'wc_'.$current_status == $complete_status ||
-                        $current_status == 'completed')
-                    {
-                        $error_string = 'Paid IPN, but order has status: '.$current_status;
-                        $this->log("    [Warning] $error_string");
-
-                    } else {
-                        $this->log('    [Info] This order has not been updated yet so setting new status...');
-
+                        $current_status == 'completed'
+                   )) {
                         $order->update_status($paid_status);
-                        $order->add_order_note(__('GloBee invoice paid. Awaiting network confirmation and payment completed status.', 'bitpay'));
+                        $order->add_order_note(__('GloBee invoice paid. Awaiting network confirmation and payment '
+                            . 'completed status.', 'globee'));
                     }
 
                     break;
 
-                // The "confirmed" status is sent when the payment is
-                // confirmed based on your transaction speed setting.
                 case 'confirmed':
-
-                    $this->log('    [Info] IPN response is a "confirmed" message.');
-
-                    if ($current_status == $complete_status       ||
+                    if (!(
+                        $current_status == $complete_status ||
                         'wc_'.$current_status == $complete_status ||
-                        $current_status == 'completed')
-                    {
-                        $error_string = 'Confirmed IPN, but order has status: '.$current_status;
-                        $this->log("    [Warning] $error_string");
-
-                    } else {
-                        $this->log('    [Info] This order has not been updated yet so setting confirmed status...');
-
+                        $current_status == 'completed'
+                   )) {
                         $order->update_status($confirmed_status);
-                        $order->add_order_note(__('GloBee invoice confirmed. Awaiting payment completed status.', 'bitpay'));
+                        $order->add_order_note(__('GloBee invoice confirmed. Awaiting payment completed status.',
+                            'globee'));
                     }
 
                     break;
 
-                // The complete status is when the Bitcoin network
-                // obtains 6 confirmations for this transaction.
                 case 'complete':
-
-                    $this->log('    [Info] IPN response is a "complete" message.');
-
-                    if ($current_status == $complete_status       ||
+                    if (!(
+                        $current_status == $complete_status ||
                         'wc_'.$current_status == $complete_status ||
-                        $current_status == 'completed')
-                    {
-                        $error_string = 'Complete IPN, but order has status: '.$current_status;
-                        $this->log("    [Warning] $error_string");
-
-                    } else {
-                        $this->log('    [Info] This order has not been updated yet so setting complete status...');
-
+                        $current_status == 'completed'
+                   )) {
                         $order->payment_complete();
                         $order->update_status($complete_status);
-                        $order->add_order_note(__('GloBee invoice payment completed. Payment credited to your merchant account.', 'bitpay'));
+                        $order->add_order_note(__('GloBee invoice payment completed. Payment credited to your merchant '
+                            . 'account.', 'globee'));
                     }
-
                     break;
 
-                // This order is invalid for some reason.
-                // Either it's a double spend or some other
-                // problem occurred.
                 case 'invalid':
-
-                    $this->log('    [Info] IPN response is a "invalid" message.');
-
-                    if ($current_status == $complete_status       ||
+                    if (!(
+                        $current_status == $complete_status ||
                         'wc_'.$current_status == $complete_status ||
-                        $current_status == 'completed')
-                    {
-                        $error_string = 'Paid IPN, but order has status: ' . $current_status;
-                        $this->log("    [Warning] $error_string");
-
-                    } else {
-                        $this->log('    [Info] This order has a problem so setting "invalid" status...');
-
-                        $order->update_status($invalid_status, __('Bitcoin payment is invalid for this order! The payment was not confirmed by the network within 1 hour. Do not ship the product for this order!', 'bitpay'));
+                        $current_status == 'completed'
+                   )) {
+                        $order->update_status($invalid_status, __('Bitcoin payment is invalid for this order! The '
+                            . 'payment was not confirmed by the network within 1 hour. Do not ship the product for '
+                            . 'this order!', 'globee'));
                     }
-
                     break;
-
-                // There was an unknown message received.
-                default:
-
-                    $this->log('    [Info] IPN response is an unknown message type. See error message below:');
-
-                    $error_string = 'Unhandled invoice status: ' . $invoice->getStatus();
-                    $this->log("    [Warning] $error_string");
             }
-
-            $this->log('    [Info] Leaving ipn_callback()...');
         }
 
         # END OF REWRITE ###############################################################################################
@@ -773,25 +615,52 @@ function woocommerce_globee_init()
         $methods[] = 'WC_Gateway_GloBee';
         return $methods;
     }
-    add_filter('woocommerce_payment_gateways', 'woocommerce_add_globee_gateway' );
+    add_filter('woocommerce_payment_gateways', 'woocommerce_add_globee_gateway');
+
+    /**
+     * Add Settings and Logs links to the plugin entry in the plugins menu
+     *
+     * @param $links
+     * @param $file
+     * @return mixed
+     */
+    function globee_action_links($links, $file)
+    {
+        static $thisPlugin;
+
+        if (false === isset($thisPlugin) || true === empty($thisPlugin)) {
+            $thisPlugin = plugin_basename(__FILE__);
+        }
+
+        if ($file == $thisPlugin) {
+            $settingsLink = '<a href="' . get_bloginfo('wpurl')
+                . '/wp-admin/admin.php?page=wc-settings&tab=checkout&section=globee">Settings</a>';
+            array_unshift($links, $settingsLink);
+        }
+
+        return $links;
+    }
+    add_filter('plugin_action_links', 'globee_action_links', 10, 2);
 }
 
-function woocommerce_globee_check_for_valid_system_requirements()
+function globee_woocommerce_check_for_valid_system_requirements()
 {
     global $wp_version;
     global $woocommerce;
 
-    $errors = array();
+    $errors = [];
     $contactYourWebAdmin = " in order to function. Please contact your web server administrator for assistance.";
 
     # PHP
     if (true === version_compare(PHP_VERSION, '5.4.0', '<')) {
-        $errors[] = 'Your PHP version is too old. The GloBee payment plugin requires PHP 5.4 or higher' . $contactYourWebAdmin;
+        $errors[] = 'Your PHP version is too old. The GloBee payment plugin requires PHP 5.4 or higher'
+            . $contactYourWebAdmin;
     }
 
     # Wordpress
     if (true === version_compare($wp_version, '4.9', '<')) {
-        $errors[] = 'Your WordPress version is too old. The GloBee payment plugin requires Wordpress 4.9 or higher' . $contactYourWebAdmin;
+        $errors[] = 'Your WordPress version is too old. The GloBee payment plugin requires Wordpress 4.9 or higher'
+            . $contactYourWebAdmin;
     }
 
     # WooCommerce
@@ -799,7 +668,8 @@ function woocommerce_globee_check_for_valid_system_requirements()
         $errors[] = 'The WooCommerce plugin for WordPress needs to be installed and activated' . $contactYourWebAdmin;
 
     } elseif (true === version_compare($woocommerce->version, '2.2', '<')) {
-        $errors[] = 'Your WooCommerce version is ' . $woocommerce->version . '. The GloBee payment plugin requires WooCommerce 2.2 or higher'. $contactYourWebAdmin;
+        $errors[] = 'Your WooCommerce version is ' . $woocommerce->version . '. The GloBee payment plugin requires '
+            . 'WooCommerce 2.2 or higher'. $contactYourWebAdmin;
     }
 
     # OpenSSL
@@ -829,25 +699,26 @@ function woocommerce_globee_check_for_valid_system_requirements()
     return null;
 }
 
-function woocommerce_globee_activate()
+function globee_woocommerce_activate()
 {
     $plugins_url = admin_url('plugins.php');
 
-    $errorMessages = woocommerce_globee_check_for_valid_system_requirements();
+    $errorMessages = globee_woocommerce_check_for_valid_system_requirements();
 
     # Activate the plugin if there is no error messages
     if (! empty($errorMessages)) {
         wp_die($failed . '<br><a href="'.$plugins_url.'">Return to plugins screen</a>');
     }
 
+    # Update the version number
+    update_option('globee_woocommerce_version', '1.0.0');
+
     # Check if an older version of the plugin needs to be deactivated
     foreach (get_plugins() as $file => $plugin) {
         if ('GloBee Woocommerce' === $plugin['Name'] && true === is_plugin_active($file)) {
             deactivate_plugins(plugin_basename(__FILE__));
-            wp_die('GloBee for WooCommerce requires that the old plugin, <b>GloBee Woocommerce</b> be deactivated and deleted.<br><a href="'.$plugins_url.'">Return to plugins screen</a>');
+            wp_die('GloBee for WooCommerce requires that the old plugin, <b>GloBee Woocommerce</b> be deactivated and '
+                . 'deleted.<br><a href="'.$plugins_url.'">Return to plugins screen</a>');
         }
     }
-
-    # Update the version number
-    update_option('woocommerce_globee_version', '1.0.0');
 }

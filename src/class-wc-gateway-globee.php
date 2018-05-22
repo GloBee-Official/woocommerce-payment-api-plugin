@@ -35,7 +35,7 @@ register_activation_hook(__FILE__, 'globee_woocommerce_activate');
 
 function globee_woocommerce_init()
 {
-    if (true === class_exists('WC_Gateway_globee')) {
+    if (true === class_exists('WC_Gateway_GloBee')) {
         return;
     }
 
@@ -86,6 +86,16 @@ function globee_woocommerce_init()
         public function __destruct()
         {
 
+        }
+
+        public function log($message)
+        {
+            if (true === isset($this->debug) && 'yes' == $this->debug) {
+                if (false === isset($this->logger) || true === empty($this->logger)) {
+                    $this->logger = new WC_Logger();
+                }
+                $this->logger->add('globee', $message);
+            }
         }
 
         public function init_form_fields()
@@ -357,6 +367,8 @@ function globee_woocommerce_init()
 
         public function ipn_callback()
         {
+            $this->log('[Info] IPN called with request: ' . json_encode($_REQUEST));
+
             // Retrieve the Invoice ID and Network URL from the supposed IPN data
             $post = file_get_contents("php://input");
 
@@ -470,6 +482,7 @@ function globee_woocommerce_init()
                     }
                     break;
             }
+            $this->log('[Info] Done with IPN call.');
         }
     }
 

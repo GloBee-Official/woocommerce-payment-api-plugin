@@ -317,14 +317,14 @@ function globee_woocommerce_init()
         {
             if (true === empty($orderId)) {
                 throw new \Exception('The GloBee payment plugin was called to process a payment but the '
-                    . 'orderId was missing. Cannot continue!');
+                    . 'orderId was missing.');
             }
 
             $order = wc_get_order($orderId);
 
             if (false === $order) {
                 throw new \Exception('The GloBee payment plugin was called to process a payment but could '
-                    . 'not retrieve the order details for order_id ' . $orderId . '. Cannot continue!');
+                    . 'not retrieve the order details for order_id ' . $orderId . '.');
             }
 
             // Mark new order according to user settings (we're awaiting the payment)
@@ -372,115 +372,95 @@ function globee_woocommerce_init()
             // Retrieve the Invoice ID and Network URL from the supposed IPN data
             $post = file_get_contents("php://input");
             if (true === empty($post)) {
-                error_log('[Error] GloBee plugin received empty POST data for an IPN message.');
+                error_log('GloBee plugin received empty POST data for an IPN message.');
                 wp_die('No post data');
             }
 
             $json = json_decode($post, true);
             if (! isset($json['data'])) {
-                error_log('[Error] GloBee plugin received an invalid JSON payload sent to IPN handler: '
-                    . $post);
+                error_log('GloBee plugin received an invalid JSON payload sent to IPN handler: '.$post);
                 wp_die('Invalid JSON');
             }
             $json = $json['data'];
 
-            if (false === array_key_exists('id', $json)) {
-                error_log('[Error] GloBee plugin did not receive an invoice ID present in JSON payload: '
-                    . var_export($json, true));
-                wp_die('No Invoice ID');
+            if (false === array_key_exists('custom_payment_id', $json)) {
+                error_log('GloBee plugin did not receive a Payment ID present in JSON payload: '.var_export($json, true));
+                wp_die('No Custom Payment ID');
+            }
+            if (false === array_key_exists('status', $json)) {
+                error_log('GloBee plugin did not receive a status present in JSON payload: '.var_export($json, true));
+                wp_die('No Status');
             }
 
-            $address = 'https://globee.com/payment-api';
-            if ($this->get_option('network') === 'testnet') {
-                $address = 'https://test.globee.com/payment-api';
-            }
-            $connector = new \GloBee\PaymentApi\Connectors\GloBeeCurlConnector($this->payment_api_key, $address, ['WooCommerce']);
-            $paymentApi = new \GloBee\PaymentApi\PaymentApi($connector);
-
-            // Fetch the invoice from globee's server to update the order
-            try {
-                $paymentRequest = $paymentApi->getPaymentRequest($json['id']);
-                if (!(true === isset($paymentRequest) && false === empty($paymentRequest))) {
-                    wp_die('Invalid IPN');
-                }
-            } catch (\Exception $e) {
-                wp_die($e->getMessage());
-            }
-
-            $orderId = $paymentRequest->customPaymentId;
+            $orderId = $json['custom_payment_id'];
 
             if (false === isset($orderId) && true === empty($orderId)) {
-                throw new \Exception('The GloBee payment plugin was called to process an IPN message but '
-                    . 'could not obtain the order ID from the invoice. Cannot continue!');
+                error_log('The GloBee payment plugin was called to process an IPN message but no order ID was set.');
+                throw new \Exception('The GloBee payment plugin was called to process an IPN message but no order ID was set.');
             }
-
-            //this is for the basic and advanced woocommerce order numbering plugins
-            //if we need to apply other filters, just add them in place of the this one
-            $orderId = apply_filters('woocommerce_order_id_from_number', $orderId);
 
             $order = wc_get_order($orderId);
 
             if (false === $order || 'WC_Order' !== get_class($order)) {
-                throw new \Exception('The GloBee payment plugin was called to process an IPN message but '
-                    . 'could not retrieve the order details for order_id ' . $orderId . '. Cannot continue!');
+                error_log('The GloBee payment plugin was called to process an IPN message but could not retrieve the order details for order_id '.$orderId);
+                throw new \Exception('The GloBee payment plugin was called to process an IPN message but could not retrieve the order details for order_id '.$orderId);
             }
 
             $current_status = $order->get_status();
 
             if (false === isset($current_status) && true === empty($current_status)) {
-                throw new \Exception('The GloBee payment plugin was called to process an IPN message but '
-                    . 'could not obtain the current status from the order. Cannot continue!');
+                error_log('The GloBee payment plugin was called to process an IPN message but could not obtain the current status from the order.');
+                throw new \Exception('The GloBee payment plugin was called to process an IPN message but could not obtain the current status from the order.');
             }
 
             $orderStates = get_option('globee_woocommerce_order_states');
-
             $newOrderStatus = $orderStates['new'];
             $paid_status = $orderStates['paid'];
             $confirmed_status = $orderStates['confirmed'];
             $complete_status = $orderStates['complete'];
             $invalid_status = $orderStates['invalid'];
-
-            $status = $paymentRequest->status;
-
+            $status = $json['status'];
             if (false === isset($status) && true === empty($status)) {
-                throw new \Exception('The GloBee payment plugin was called to process an IPN message but '
-                    . 'could not obtain the current status from the invoice. Cannot continue!');
+                error_log('The GloBee payment plugin was called to process an IPN message but could not obtain the new status from the payment request.');
+                throw new \Exception('The GloBee payment plugin was called to process an IPN message but could not obtain the new status from the payment request.');
             }
 
             switch ($status) {
                 case 'paid':
-                    if (!($current_status == $complete_status || 'wc_'.$current_status == $complete_status ||$current_status == 'completed')) {
+                    //if (!($current_status == $complete_status || 'wc_'.$current_status == $complete_status ||$current_status == 'completed')) {
                         $order->update_status($paid_status);
-                        $order->add_order_note(__('GloBee invoice paid. Awaiting network confirmation and payment '
+                        $order->add_order_note(__('GloBee payment paid. Awaiting network confirmation and payment '
                             . 'completed status.', 'globee'));
-                    }
+                    //}
                     break;
 
                 case 'confirmed':
-                    if (!($current_status == $complete_status || 'wc_'.$current_status == $complete_status || $current_status == 'completed')) {
+                    //if (!($current_status == $complete_status || 'wc_'.$current_status == $complete_status || $current_status == 'completed')) {
                         $order->update_status($confirmed_status);
-                        $order->add_order_note(__('GloBee invoice confirmed. Awaiting payment completed status.',
+                        $order->add_order_note(__('GloBee payment confirmed. Awaiting payment completed status.',
                             'globee'));
-                    }
+                    //}
                     break;
 
-                case 'complete':
-                    if (!($current_status == $complete_status || 'wc_'.$current_status == $complete_status || $current_status == 'completed')) {
+                case 'completed':
+                    //if (!($current_status == $complete_status || 'wc_'.$current_status == $complete_status || $current_status == 'completed')) {
                         $order->payment_complete();
                         $order->update_status($complete_status);
-                        $order->add_order_note(__('GloBee invoice payment completed. Payment credited to your merchant '
+                        $order->add_order_note(__('GloBee payment completed. Payment credited to your merchant '
                             . 'account.', 'globee'));
-                    }
+                    //}
                     break;
 
                 case 'invalid':
-                    if (!($current_status == $complete_status || 'wc_'.$current_status == $complete_status || $current_status == 'completed')) {
-                        $order->update_status($invalid_status, __('Bitcoin payment is invalid for this order! The '
+                    //if (!($current_status == $complete_status || 'wc_'.$current_status == $complete_status || $current_status == 'completed')) {
+                        $order->update_status($invalid_status, __('Payment is invalid for this order! The '
                             . 'payment was not confirmed by the network within 1 hour. Do not ship the product for '
                             . 'this order!', 'globee'));
-                    }
+                    //}
                     break;
             }
+            error_log('[INFO] Changed Order '.$orderId.'\'s state from '.$current_status.' to '.$status);
+
         }
     }
 

@@ -117,7 +117,7 @@ function globee_woocommerce_init()
                     'type' => 'text',
                     'description' => __('Your Payment API Key. You can find this key on the Payment API page of your '
                         . 'account on globee.com', 'globee'),
-                    'default' => $this->payment_api_key,
+                    'default' => $this->payment_api_key ?? '',
                     'desc_tip' => true,
                 ],
                 'network' => [
@@ -576,7 +576,7 @@ function globee_woocommerce_activate()
 
     # Activate the plugin if there is no error messages
     if (! empty($errorMessages)) {
-        wp_die($failed . '<br><a href="'.$plugins_url.'">Return to plugins screen</a>');
+        wp_die($errorMessages . '<br><a href="'.$plugins_url.'">Return to plugins screen</a>');
     }
 
     # Update the version number

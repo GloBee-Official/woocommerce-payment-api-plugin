@@ -25,7 +25,18 @@ try {
     require_once __DIR__.'/lib/Models/Model.php';
     require_once __DIR__.'/lib/Models/PaymentRequest.php';
     require_once __DIR__.'/lib/Exceptions/Http/HttpException.php';
+    require_once __DIR__.'/lib/Exceptions/Http/NotFoundException.php';
     require_once __DIR__.'/lib/Exceptions/Http/AuthenticationException.php';
+    require_once __DIR__.'/lib/Exceptions/Http/ForbiddenException.php';
+    require_once __DIR__.'/lib/Exceptions/Http/ServerErrorException.php';
+    require_once __DIR__.'/lib/Exceptions/Connectors/ConnectionException.php';
+    require_once __DIR__.'/lib/Exceptions/Connectors/CurlConnectionException.php';
+    require_once __DIR__.'/lib/Exceptions/Validation/ValidationException.php';
+    require_once __DIR__.'/lib/Exceptions/Validation/BelowMinimumException.php';
+    require_once __DIR__.'/lib/Exceptions/Validation/InvalidArgumentException.php';
+    require_once __DIR__.'/lib/Exceptions/Validation/InvalidEmailException.php';
+    require_once __DIR__.'/lib/Exceptions/Validation/InvalidSelectionException.php';
+    require_once __DIR__.'/lib/Exceptions/Validation/InvalidUrlException.php';
 } catch (\Exception $exception) {
     throw new \Exception('The PaymentAPI plugin was not installed correctly or the files are corrupt. Please reinstall the plugin. If this message persists after a reinstall, contact support@globee.com with this message.');
 }
@@ -86,16 +97,6 @@ function globee_woocommerce_init()
         public function __destruct()
         {
 
-        }
-
-        public function log($message)
-        {
-            if (true === isset($this->debug) && 'yes' == $this->debug) {
-                if (false === isset($this->logger) || true === empty($this->logger)) {
-                    $this->logger = new WC_Logger();
-                }
-                $this->logger->add('globee', $message);
-            }
         }
 
         public function init_form_fields()
@@ -346,6 +347,7 @@ function globee_woocommerce_init()
             $paymentRequest->setConfirmationSpeed($this->get_option('transaction_speed', 'medium'));
             $paymentRequest->setTotal($order->calculate_totals());
             $paymentRequest->setCustomerEmail($order->get_billing_email());
+            $paymentRequest->customPaymentId = $orderId;
 
             $response = $paymentApi->createPaymentRequest($paymentRequest);
 
@@ -367,11 +369,8 @@ function globee_woocommerce_init()
 
         public function ipn_callback()
         {
-            $this->log('[Info] IPN called with request: ' . json_encode($_REQUEST));
-
             // Retrieve the Invoice ID and Network URL from the supposed IPN data
             $post = file_get_contents("php://input");
-
             if (true === empty($post)) {
                 error_log('[Error] GloBee plugin received empty POST data for an IPN message.');
                 wp_die('No post data');
@@ -400,7 +399,7 @@ function globee_woocommerce_init()
 
             // Fetch the invoice from globee's server to update the order
             try {
-                $paymentRequest = $paymentApi->getPaymentRequest($json->data->id);
+                $paymentRequest = $paymentApi->getPaymentRequest($json['id']);
                 if (!(true === isset($paymentRequest) && false === empty($paymentRequest))) {
                     wp_die('Invalid IPN');
                 }
@@ -408,7 +407,7 @@ function globee_woocommerce_init()
                 wp_die($e->getMessage());
             }
 
-            $orderId = $paymentRequest->custom_payment_id;
+            $orderId = $paymentRequest->customPaymentId;
 
             if (false === isset($orderId) && true === empty($orderId)) {
                 throw new \Exception('The GloBee payment plugin was called to process an IPN message but '
@@ -441,7 +440,7 @@ function globee_woocommerce_init()
             $complete_status = $orderStates['complete'];
             $invalid_status = $orderStates['invalid'];
 
-            $status = $invoice->status;
+            $status = $paymentRequest->status;
 
             if (false === isset($status) && true === empty($status)) {
                 throw new \Exception('The GloBee payment plugin was called to process an IPN message but '
@@ -482,7 +481,6 @@ function globee_woocommerce_init()
                     }
                     break;
             }
-            $this->log('[Info] Done with IPN call.');
         }
     }
 

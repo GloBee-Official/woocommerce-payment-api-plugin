@@ -425,38 +425,50 @@ function globee_woocommerce_init()
                 throw new \Exception('The GloBee payment plugin was called to process an IPN message but could not obtain the new status from the payment request.');
             }
 
+            $address = 'https://globee.com/payment-api';
+            if ($this->get_option('network') === 'testnet') {
+                $address = 'https://test.globee.com/payment-api';
+            }
+            $connector = new \GloBee\PaymentApi\Connectors\GloBeeCurlConnector($this->payment_api_key, $address, ['WooCommerce']);
+            $paymentApi = new \GloBee\PaymentApi\PaymentApi($connector);
+            $paymentRequest = $paymentApi->getPaymentRequest($json['id']);
+            if ($paymentRequest->customPaymentId != $orderId) {
+            	error_log('Trying to update an order where the order ID does not match the custom payment ID from the GloBee Payment Request.');
+                throw new \Exception('Trying to update an order where the order ID does not match the custom payment ID from the GloBee Payment Request.');
+            }
+
             switch ($status) {
                 case 'paid':
-                    //if (!($current_status == $complete_status || 'wc_'.$current_status == $complete_status ||$current_status == 'completed')) {
+                    if (!($current_status == $complete_status || 'wc_'.$current_status == $complete_status ||$current_status == 'completed')) {
                         $order->update_status($paid_status);
                         $order->add_order_note(__('GloBee payment paid. Awaiting network confirmation and payment '
                             . 'completed status.', 'globee'));
-                    //}
+                    }
                     break;
 
                 case 'confirmed':
-                    //if (!($current_status == $complete_status || 'wc_'.$current_status == $complete_status || $current_status == 'completed')) {
+                    if (!($current_status == $complete_status || 'wc_'.$current_status == $complete_status || $current_status == 'completed')) {
                         $order->update_status($confirmed_status);
                         $order->add_order_note(__('GloBee payment confirmed. Awaiting payment completed status.',
                             'globee'));
-                    //}
+                    }
                     break;
 
                 case 'completed':
-                    //if (!($current_status == $complete_status || 'wc_'.$current_status == $complete_status || $current_status == 'completed')) {
+                    if (!($current_status == $complete_status || 'wc_'.$current_status == $complete_status || $current_status == 'completed')) {
                         $order->payment_complete();
                         $order->update_status($complete_status);
                         $order->add_order_note(__('GloBee payment completed. Payment credited to your merchant '
                             . 'account.', 'globee'));
-                    //}
+                    }
                     break;
 
                 case 'invalid':
-                    //if (!($current_status == $complete_status || 'wc_'.$current_status == $complete_status || $current_status == 'completed')) {
+                    if (!($current_status == $complete_status || 'wc_'.$current_status == $complete_status || $current_status == 'completed')) {
                         $order->update_status($invalid_status, __('Payment is invalid for this order! The '
                             . 'payment was not confirmed by the network within 1 hour. Do not ship the product for '
                             . 'this order!', 'globee'));
-                    //}
+                    }
                     break;
             }
             error_log('[INFO] Changed Order '.$orderId.'\'s state from '.$current_status.' to '.$status);

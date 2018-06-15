@@ -360,8 +360,8 @@ function globee_woocommerce_init()
                 return;
             }
 
-            $paymentRequestId = $response->getId(); // Save this ID to know when payment has been made
-            $redirectUrl = $response->getRedirectUrl(); // Redirect your client to this URL to make payment
+            $paymentRequestId = $response->id; // Save this ID to know when payment has been made
+            $redirectUrl = $response->redirectUrl; // Redirect your client to this URL to make payment
 
             // Redurce order stock
             wc_reduce_stock_levels($order_id);

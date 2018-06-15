@@ -12,13 +12,13 @@
                 "version": "4.9.5",
                 "dist": {
                     "type": "zip",
-                    "url": "https://github.com/WordPress/WordPress/archive/4.9.5.zip"
+                    "url": "https://github.com/WordPress/WordPress/archive/4.9.6.zip"
                 }
             }
         }
     ],
     "require": {
-        "globee/payment-api": "v0.2.0"
+        "globee/payment-api": "v0.3.0"
     },
 	"require-dev": {
         "wp-cli/wp-cli": "*",

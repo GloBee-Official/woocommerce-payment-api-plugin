@@ -22,6 +22,7 @@ try {
     require_once __DIR__.'/lib/Connectors/GloBeeCurlConnector.php';
     require_once __DIR__.'/lib/PaymentApi.php';
     require_once __DIR__.'/lib/Models/PropertyTrait.php';
+    require_once __DIR__.'/lib/Models/ValidationTrait.php';
     require_once __DIR__.'/lib/Models/Model.php';
     require_once __DIR__.'/lib/Models/PaymentRequest.php';
     require_once __DIR__.'/lib/Exceptions/Http/HttpException.php';
@@ -64,6 +65,8 @@ function globee_woocommerce_init()
      */
     class WC_Gateway_GloBee extends WC_Payment_Gateway
     {
+        public static $log = false;
+
         public function __construct()
         {
             $this->id = 'globee';
@@ -313,49 +316,55 @@ function globee_woocommerce_init()
             // Do something here if you want to customize the return url page
         }
 
-        public function process_payment($orderId)
+        public function process_payment($order_id)
         {
-            if (true === empty($orderId)) {
+            $this->log('Processing Order ID: ' . $order_id);
+
+            if (true === empty($order_id)) {
                 throw new \Exception('The GloBee payment plugin was called to process a payment but the '
                     . 'orderId was missing.');
             }
 
-            $order = wc_get_order($orderId);
-
+            $order = wc_get_order($order_id);
             if (false === $order) {
                 throw new \Exception('The GloBee payment plugin was called to process a payment but could '
-                    . 'not retrieve the order details for order_id ' . $orderId . '.');
+                    . 'not retrieve the order details for order_id ' . $order_id . '.');
             }
 
             // Mark new order according to user settings (we're awaiting the payment)
             $newOrderStatus = get_option('globee_woocommerce_order_states')['new'];
             $order->update_status($newOrderStatus, 'Awaiting payment notification from GloBee.');
 
-            // Redirect URL & Notification URL
-            $redirectUrl = $this->get_option('redirect_url', $this->get_return_url($order));
-
-            $address = 'https://globee.com/payment-api';
+            $live  = true;
             if ($this->get_option('network') === 'testnet') {
-                $address = 'https://test.globee.com/payment-api';
+                $live = false;
             }
-            $connector = new \GloBee\PaymentApi\Connectors\GloBeeCurlConnector($this->payment_api_key, $address, ['WooCommerce']);
+            $connector = new \GloBee\PaymentApi\Connectors\GloBeeCurlConnector($this->payment_api_key, $live, ['WooCommerce']);
             $paymentApi = new \GloBee\PaymentApi\PaymentApi($connector);
             $paymentRequest = new \GloBee\PaymentApi\Models\PaymentRequest();
-            $paymentRequest->setSuccessUrl($this->get_option('redirect_url', $this->get_return_url()));
-            $paymentRequest->setIpnUrl($this->get_option('notification_url', WC()->api_request_url('WC_Gateway_globee')));
-            $paymentRequest->setCurrency(get_woocommerce_currency());
-            $paymentRequest->setConfirmationSpeed($this->get_option('transaction_speed', 'medium'));
-            $paymentRequest->setTotal($order->calculate_totals());
-            $paymentRequest->setCustomerEmail($order->get_billing_email());
-            $paymentRequest->customPaymentId = $orderId;
-
-            $response = $paymentApi->createPaymentRequest($paymentRequest);
+            $paymentRequest->successUrl = $this->get_option('redirect_url', $this->get_return_url());
+            $paymentRequest->ipnUrl = $this->get_option('notification_url', WC()->api_request_url('WC_Gateway_globee'));
+            $paymentRequest->currency  =get_woocommerce_currency();
+            $paymentRequest->confirmationSpeed = $this->get_option('transaction_speed', 'medium');
+            $paymentRequest->total = $order->calculate_totals();
+            $paymentRequest->customerEmail = $order->get_billing_email();
+            $paymentRequest->customPaymentId = $order_id;
+            try {
+                $response = $paymentApi->createPaymentRequest($paymentRequest);
+            } catch (Exception $e) {
+                $errors = '';
+                foreach ($e->getErrors() as $error) {
+                    $errors .= $error['message'] . "<br/>";
+                }
+                wc_add_notice($errors, 'error');
+                return;
+            }
 
             $paymentRequestId = $response->getId(); // Save this ID to know when payment has been made
             $redirectUrl = $response->getRedirectUrl(); // Redirect your client to this URL to make payment
 
             // Redurce order stock
-            wc_reduce_stock_levels($orderId);
+            wc_reduce_stock_levels($order_id);
 
             // Remove cart
             WC()->cart->empty_cart();
@@ -365,6 +374,19 @@ function globee_woocommerce_init()
                 'result'   => 'success',
                 'redirect' => $redirectUrl,
             ];
+        }
+
+        public function log($message, $level = 'info', $source = null)
+        {
+            error_log($message);
+            if($source == null ) {
+                $source = 'globee_woocommerce';
+            }
+
+            if (empty(self::$log)) {
+                self::$log = wc_get_logger();
+            }
+            self::$log->log($level, $message, array('source' => $source));
         }
 
         public function ipn_callback()
@@ -393,6 +415,8 @@ function globee_woocommerce_init()
             }
 
             $orderId = $json['custom_payment_id'];
+
+            $this->log('Processing Callback for Order ID: ' . $orderId);
 
             if (false === isset($orderId) && true === empty($orderId)) {
                 error_log('The GloBee payment plugin was called to process an IPN message but no order ID was set.');

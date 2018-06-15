@@ -398,7 +398,7 @@ function globee_woocommerce_init()
                 wp_die('No post data');
             }
 
-            $json = json_decode($post, true);
+            $json = json_decode(json_decode($post), true);
             if (! isset($json['data'])) {
                 error_log('GloBee plugin received an invalid JSON payload sent to IPN handler: '.$post);
                 wp_die('Invalid JSON');
@@ -415,23 +415,19 @@ function globee_woocommerce_init()
             }
 
             $orderId = $json['custom_payment_id'];
-
             $this->log('Processing Callback for Order ID: ' . $orderId);
-
             if (false === isset($orderId) && true === empty($orderId)) {
                 error_log('The GloBee payment plugin was called to process an IPN message but no order ID was set.');
                 throw new \Exception('The GloBee payment plugin was called to process an IPN message but no order ID was set.');
             }
 
             $order = wc_get_order($orderId);
-
             if (false === $order || 'WC_Order' !== get_class($order)) {
                 error_log('The GloBee payment plugin was called to process an IPN message but could not retrieve the order details for order_id '.$orderId);
                 throw new \Exception('The GloBee payment plugin was called to process an IPN message but could not retrieve the order details for order_id '.$orderId);
             }
 
             $current_status = $order->get_status();
-
             if (false === isset($current_status) && true === empty($current_status)) {
                 error_log('The GloBee payment plugin was called to process an IPN message but could not obtain the current status from the order.');
                 throw new \Exception('The GloBee payment plugin was called to process an IPN message but could not obtain the current status from the order.');
@@ -449,11 +445,11 @@ function globee_woocommerce_init()
                 throw new \Exception('The GloBee payment plugin was called to process an IPN message but could not obtain the new status from the payment request.');
             }
 
-            $address = 'https://globee.com/payment-api';
+            $live  = true;
             if ($this->get_option('network') === 'testnet') {
-                $address = 'https://test.globee.com/payment-api';
+                $live = false;
             }
-            $connector = new \GloBee\PaymentApi\Connectors\GloBeeCurlConnector($this->payment_api_key, $address, ['WooCommerce']);
+            $connector = new \GloBee\PaymentApi\Connectors\GloBeeCurlConnector($this->payment_api_key, $live, ['WooCommerce']);
             $paymentApi = new \GloBee\PaymentApi\PaymentApi($connector);
             $paymentRequest = $paymentApi->getPaymentRequest($json['id']);
             if ($paymentRequest->customPaymentId != $orderId) {

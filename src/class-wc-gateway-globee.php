@@ -398,12 +398,11 @@ function globee_woocommerce_init()
                 wp_die('No post data');
             }
 
-            $json = json_decode(json_decode($post), true);
-            if (! isset($json['data'])) {
+            $json = json_decode($post, true);
+            if (! isset($json['id'])) {
                 error_log('GloBee plugin received an invalid JSON payload sent to IPN handler: '.$post);
                 wp_die('Invalid JSON');
             }
-            $json = $json['data'];
 
             if (false === array_key_exists('custom_payment_id', $json)) {
                 error_log('GloBee plugin did not receive a Payment ID present in JSON payload: '.var_export($json, true));

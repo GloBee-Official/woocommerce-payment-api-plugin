@@ -137,7 +137,7 @@ function globee_woocommerce_init()
                         'Your Payment API Key. You can find this key on the Payment API page of your account on globee.com',
                         'globee'
                     ),
-                    'default' => $this->payment_api_key ?? '',
+                    'default' => $this->payment_api_key ?: '',
                     'desc_tip' => true,
                 ],
                 'network' => [

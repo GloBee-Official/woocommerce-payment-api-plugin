@@ -3,7 +3,7 @@
 Plugin Name: GloBee
 Plugin URI: https://globee.com/woocommerce
 Description: Accepts cryptocurrency payments on your WooCommerce Shop using GloBee.
-Version: 1.0.0
+Version: 1.0.1
 Author: GloBee
 Author URI: https://globee.com/
 
@@ -205,7 +205,7 @@ function globee_woocommerce_init()
                             .'Thank you for using GloBee!',
                             'globee'
                         ),
-                        get_option('globee_woocommerce_version', '1.0.0'),
+                        get_option('globee_woocommerce_version', '1.0.1'),
                         PHP_MAJOR_VERSION.'.'.PHP_MINOR_VERSION
                     ),
                 ],
@@ -682,7 +682,7 @@ function globee_woocommerce_activate()
     }
 
     # Update the version number
-    update_option('globee_woocommerce_version', '1.0.0');
+    update_option('globee_woocommerce_version', '1.0.1');
 
     # Check if an older version of the plugin needs to be deactivated
     foreach (get_plugins() as $file => $plugin) {

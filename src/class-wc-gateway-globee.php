@@ -16,33 +16,7 @@ if (false === defined('ABSPATH')) {
     exit;
 }
 
-try {
-    require_once __DIR__.'/lib/Connectors/Connector.php';
-    require_once __DIR__.'/lib/Connectors/CurlWrapper.php';
-    require_once __DIR__.'/lib/Connectors/GloBeeCurlConnector.php';
-    require_once __DIR__.'/lib/PaymentApi.php';
-    require_once __DIR__.'/lib/Models/PropertyTrait.php';
-    require_once __DIR__.'/lib/Models/ValidationTrait.php';
-    require_once __DIR__.'/lib/Models/Model.php';
-    require_once __DIR__.'/lib/Models/PaymentRequest.php';
-    require_once __DIR__.'/lib/Exceptions/Http/HttpException.php';
-    require_once __DIR__.'/lib/Exceptions/Http/NotFoundException.php';
-    require_once __DIR__.'/lib/Exceptions/Http/AuthenticationException.php';
-    require_once __DIR__.'/lib/Exceptions/Http/ForbiddenException.php';
-    require_once __DIR__.'/lib/Exceptions/Http/ServerErrorException.php';
-    require_once __DIR__.'/lib/Exceptions/Connectors/ConnectionException.php';
-    require_once __DIR__.'/lib/Exceptions/Connectors/CurlConnectionException.php';
-    require_once __DIR__.'/lib/Exceptions/Validation/ValidationException.php';
-    require_once __DIR__.'/lib/Exceptions/Validation/BelowMinimumException.php';
-    require_once __DIR__.'/lib/Exceptions/Validation/InvalidArgumentException.php';
-    require_once __DIR__.'/lib/Exceptions/Validation/InvalidEmailException.php';
-    require_once __DIR__.'/lib/Exceptions/Validation/InvalidSelectionException.php';
-    require_once __DIR__.'/lib/Exceptions/Validation/InvalidUrlException.php';
-} catch (\Exception $exception) {
-    throw new \Exception(
-        'The PaymentAPI plugin was not installed correctly or the files are corrupt. Please reinstall the plugin. If this message persists after a reinstall, contact support@globee.com with this message.'
-    );
-}
+require_once __DIR__.'/autoload.php';
 
 add_action('plugins_loaded', 'globee_woocommerce_init', 0);
 register_activation_hook(__FILE__, 'globee_woocommerce_activate');

@@ -19,7 +19,7 @@
     ],
     "require": {
         "php": ">5.3",
-        "globee/payment-api": "v0.3.0"
+        "globee/payment-api": "~v0.3.0"
     },
 	"require-dev": {
         "wp-cli/wp-cli": "*",

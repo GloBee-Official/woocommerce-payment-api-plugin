@@ -23,10 +23,6 @@ register_activation_hook(__FILE__, 'globee_woocommerce_activate');
 
 function globee_woocommerce_init()
 {
-    if (true === class_exists('WC_Gateway_GloBee')) {
-        return;
-    }
-
     if (false === class_exists('WC_Payment_Gateway')) {
         return;
     }
@@ -36,8 +32,6 @@ function globee_woocommerce_init()
      */
     load_plugin_textdomain('wc-gateway-globee', false, dirname(plugin_basename(__FILE__)).'/languages');
 
-    require_once __DIR__.'/WC_Gateway_GloBee.php';
-
     /**
      * Add the Gateway to WooCommerce
      *
@@ -46,7 +40,7 @@ function globee_woocommerce_init()
      */
     function woocommerce_add_globee_gateway($methods)
     {
-        $methods[] = 'WC_Gateway_GloBee';
+        $methods[] = 'GloBee\\WooCommerce\\Gateway';
 
         return $methods;
     }

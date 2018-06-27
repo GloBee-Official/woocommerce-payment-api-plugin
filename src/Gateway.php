@@ -301,7 +301,6 @@ class Gateway extends \WC_Payment_Gateway
             return;
         }
 
-        $paymentRequestId = $response->id; // Save this ID to know when payment has been made
         $redirectUrl = $response->redirectUrl; // Redirect your client to this URL to make payment
 
         // Redurce order stock
@@ -386,7 +385,6 @@ class Gateway extends \WC_Payment_Gateway
         }
 
         $orderStates = get_option('globee_woocommerce_order_states');
-        $newOrderStatus = $orderStates['new'];
         $paid_status = $orderStates['paid'];
         $confirmed_status = $orderStates['confirmed'];
         $complete_status = $orderStates['complete'];

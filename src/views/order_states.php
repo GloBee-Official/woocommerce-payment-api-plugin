@@ -4,9 +4,9 @@
         <table cellspacing="0" cellpadding="0" style="padding:0">
             <?php foreach ($globeeStatuses as $globeeState => $globeeName): ?>
                 <tr>
-                    <th><?= $globeeName; ?></th>
+                    <th><label for="globee_state_<?= $globeeState ?>"><?= $globeeName; ?></label></th>
                     <td>
-                        <select name="globee_woocommerce_order_states[<?= $globeeState; ?>]">
+                        <select id="globee_state_<?= $globeeState ?>" name="globee_woocommerce_order_states[<?= $globeeState; ?>]">
                             <?php
                             $orderStates = get_option('globee_woocommerce_order_states');
                             foreach ($wcStatuses as $wcState => $wcName) {

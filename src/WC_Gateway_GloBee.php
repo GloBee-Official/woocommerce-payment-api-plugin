@@ -1,5 +1,7 @@
 <?php
 
+use GloBee\PaymentApi\Exceptions\Validation\ValidationException;
+
 /**
  * Gateway class
  */
@@ -322,7 +324,7 @@ class WC_Gateway_GloBee extends WC_Payment_Gateway
         $paymentRequest->customPaymentId = $order_id;
         try {
             $response = $paymentApi->createPaymentRequest($paymentRequest);
-        } catch (Exception $e) {
+        } catch (ValidationException $e) {
             $errors = '';
             foreach ($e->getErrors() as $error) {
                 $errors .= $error['message']."<br/>";

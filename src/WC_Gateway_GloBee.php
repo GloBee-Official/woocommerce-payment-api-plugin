@@ -184,8 +184,7 @@ class WC_Gateway_GloBee extends WC_Payment_Gateway
                         <tr>
                             <th><?php echo $globeeName; ?></th>
                             <td>
-                                <select name="globee_woocommerce_order_states[<?php echo $globeeState; ?>]"
-                                        width="200">
+                                <select name="globee_woocommerce_order_states[<?php echo $globeeState; ?>]">
                                     <?php
                                     $orderStates = get_option('globee_woocommerce_order_states');
                                     foreach ($wcStatuses as $wcState => $wcName) {

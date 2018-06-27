@@ -7,6 +7,12 @@ class WC_Gateway_GloBee extends WC_Payment_Gateway
 {
     public static $log = false;
 
+    protected $order_states;
+
+    protected $network;
+
+    protected $payment_api_key;
+
     public function __construct()
     {
         $this->id = 'globee';

@@ -283,7 +283,10 @@ class Gateway extends \WC_Payment_Gateway
         $paymentApi = new \GloBee\PaymentApi\PaymentApi($connector);
         $paymentRequest = new \GloBee\PaymentApi\Models\PaymentRequest();
         $paymentRequest->successUrl = $this->get_option('redirect_url', $this->get_return_url());
-        $paymentRequest->ipnUrl = $this->get_option('notification_url', WC()->api_request_url('GloBee\\WooCommerce\\Gateway'));
+        $paymentRequest->ipnUrl = $this->get_option(
+            'notification_url',
+            WC()->api_request_url('GloBee\\WooCommerce\\Gateway')
+        );
         $paymentRequest->currency = get_woocommerce_currency();
         $paymentRequest->confirmationSpeed = $this->get_option('transaction_speed', 'medium');
         $paymentRequest->total = $order->calculate_totals();

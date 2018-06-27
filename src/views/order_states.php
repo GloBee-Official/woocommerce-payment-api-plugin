@@ -6,7 +6,8 @@
                 <tr>
                     <th><label for="globee_state_<?= $globeeState ?>"><?= $globeeName; ?></label></th>
                     <td>
-                        <select id="globee_state_<?= $globeeState ?>" name="globee_woocommerce_order_states[<?= $globeeState; ?>]">
+                        <select id="globee_state_<?= $globeeState ?>"
+                                name="globee_woocommerce_order_states[<?= $globeeState; ?>]">
                             <?php
                             $orderStates = get_option('globee_woocommerce_order_states');
                             foreach ($wcStatuses as $wcState => $wcName) {

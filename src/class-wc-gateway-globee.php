@@ -8,8 +8,8 @@ Author: GloBee
 Author URI: https://globee.com/
 
 License:           Copyright 2016-2017 GloBee., MIT License
-License URI:       https://github.com/globee/woocommerce-payment-api-plugin/blob/master/LICENSE
-GitHub Plugin URI: https://github.com/globee/woocommerce-payment-api-plugin
+License URI:       https://github.com/GloBee-Official/woocommerce-payment-api-plugin/blob/master/LICENSE
+GitHub Plugin URI: https://github.com/GloBee-Official/woocommerce-payment-api-plugin/
 */
 
 if (false === defined('ABSPATH')) {

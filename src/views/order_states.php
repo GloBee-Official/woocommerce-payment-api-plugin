@@ -2,11 +2,11 @@
     <th scope="row" class="titledesc">Order States:</th>
     <td class="forminp" id="globee_order_states">
         <table cellspacing="0" cellpadding="0" style="padding:0">
-            <?php foreach ($globeeStatuses as $globeeState => $globeeName) { ?>
+            <?php foreach ($globeeStatuses as $globeeState => $globeeName): ?>
                 <tr>
-                    <th><?php echo $globeeName; ?></th>
+                    <th><?= $globeeName; ?></th>
                     <td>
-                        <select name="globee_woocommerce_order_states[<?php echo $globeeState; ?>]">
+                        <select name="globee_woocommerce_order_states[<?= $globeeState; ?>]">
                             <?php
                             $orderStates = get_option('globee_woocommerce_order_states');
                             foreach ($wcStatuses as $wcState => $wcName) {
@@ -23,7 +23,7 @@
                         </select>
                     </td>
                 </tr>
-            <?php } ?>
+            <?php endforeach; ?>
         </table>
     </td>
 </tr>

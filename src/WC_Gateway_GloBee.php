@@ -43,11 +43,6 @@ class WC_Gateway_GloBee extends WC_Payment_Gateway
         add_action('woocommerce_api_wc_gateway_globee', [$this, 'ipn_callback']);
     }
 
-    public function __destruct()
-    {
-
-    }
-
     public function init_form_fields()
     {
         $this->form_fields = [

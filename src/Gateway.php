@@ -3,6 +3,7 @@
 namespace GloBee\WooCommerce;
 
 use GloBee\PaymentApi\Connectors\GloBeeCurlConnector;
+use GloBee\PaymentApi\Exceptions\Http\AuthenticationException;
 use GloBee\PaymentApi\Exceptions\Validation\ValidationException;
 use GloBee\PaymentApi\Models\PaymentRequest;
 use GloBee\PaymentApi\PaymentApi;
@@ -51,6 +52,37 @@ class Gateway extends \WC_Payment_Gateway
 
         // Save IPN Callback
         add_action('woocommerce_api_wc_gateway_globee', [$this, 'ipn_callback']);
+
+        if (empty($_POST)) {
+            add_action('admin_notices', [$this, 'validate_api_key']);
+        }
+    }
+
+    /**
+     * Validate api key
+     */
+    public function validate_api_key()
+    {
+        if (empty($this->payment_api_key)) {
+            $this->display_globee_errors(
+                '<span style="font-size: 1.4em;">Please add your GloBee API key to enable payments through GloBee.</span>'
+            );
+
+            return;
+        }
+        $paymentApi = $this->get_payment_api();
+        try {
+            $paymentApi->getAccount();
+        } catch (AuthenticationException $e) {
+            $this->display_globee_errors(
+                '<span style="font-size: 1.4em;">Warning: There has been a problem authenticating with the GloBee API.'
+                .' Please check that your key is correct and that you are using the correct Network.</span>'
+            );
+        } catch (\Exception $e) {
+            $this->display_globee_errors(
+                'There has been a problem connecting to the GloBee API. Please make sure all your settings are correct.'
+            );
+        }
     }
 
     public function init_form_fields()
@@ -488,5 +520,18 @@ class Gateway extends \WC_Payment_Gateway
         }
 
         return $this->payment_api;
+    }
+
+    /**
+     * @param $errors
+     */
+    public function display_globee_errors($errors)
+    {
+        $errors = (array)$errors;
+        echo '<div id="woocommerce_errors" class="error notice is-dismissible">';
+        foreach ($errors as $error) {
+            echo '<p>'.wp_kses_post($error).'</p>';
+        }
+        echo '</div>';
     }
 }

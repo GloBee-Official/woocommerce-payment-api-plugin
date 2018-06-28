@@ -186,7 +186,7 @@ class Gateway extends \WC_Payment_Gateway
                         .'Thank you for using GloBee!',
                         'globee'
                     ),
-                    get_option('globee_woocommerce_version', '1.0.1'),
+                    get_option('globee_woocommerce_version', '1.1.0'),
                     PHP_MAJOR_VERSION.'.'.PHP_MINOR_VERSION
                 ),
             ],

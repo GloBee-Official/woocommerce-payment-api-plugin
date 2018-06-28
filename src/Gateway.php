@@ -2,7 +2,10 @@
 
 namespace GloBee\WooCommerce;
 
+use GloBee\PaymentApi\Connectors\GloBeeCurlConnector;
 use GloBee\PaymentApi\Exceptions\Validation\ValidationException;
+use GloBee\PaymentApi\Models\PaymentRequest;
+use GloBee\PaymentApi\PaymentApi;
 
 /**
  * Gateway class
@@ -16,6 +19,9 @@ class Gateway extends \WC_Payment_Gateway
     protected $network;
 
     protected $payment_api_key;
+
+    /** @var PaymentApi */
+    protected $payment_api;
 
     public function __construct()
     {
@@ -271,17 +277,8 @@ class Gateway extends \WC_Payment_Gateway
         $newOrderStatus = get_option('globee_woocommerce_order_states')['new'];
         $order->update_status($newOrderStatus, 'Awaiting payment notification from GloBee.');
 
-        $live = true;
-        if ($this->get_option('network') === 'testnet') {
-            $live = false;
-        }
-        $connector = new \GloBee\PaymentApi\Connectors\GloBeeCurlConnector(
-            $this->payment_api_key,
-            $live,
-            ['WooCommerce']
-        );
-        $paymentApi = new \GloBee\PaymentApi\PaymentApi($connector);
-        $paymentRequest = new \GloBee\PaymentApi\Models\PaymentRequest();
+        $paymentApi = $this->get_payment_api();
+        $paymentRequest = new PaymentRequest();
         $paymentRequest->successUrl = $this->get_option('redirect_url', $this->get_return_url());
         $paymentRequest->ipnUrl = $this->get_option(
             'notification_url',
@@ -402,16 +399,7 @@ class Gateway extends \WC_Payment_Gateway
             );
         }
 
-        $live = true;
-        if ($this->get_option('network') === 'testnet') {
-            $live = false;
-        }
-        $connector = new \GloBee\PaymentApi\Connectors\GloBeeCurlConnector(
-            $this->payment_api_key,
-            $live,
-            ['WooCommerce']
-        );
-        $paymentApi = new \GloBee\PaymentApi\PaymentApi($connector);
+        $paymentApi = $this->get_payment_api();
         $paymentRequest = $paymentApi->getPaymentRequest($json['id']);
         if ($paymentRequest->customPaymentId != $orderId) {
             error_log(
@@ -478,5 +466,27 @@ class Gateway extends \WC_Payment_Gateway
         }
         error_log('[INFO] Changed Order '.$orderId.'\'s state from '.$current_status.' to '.$status);
 
+    }
+
+    /**
+     * @return PaymentApi
+     */
+    protected function get_payment_api()
+    {
+        if (!$this->payment_api) {
+            global $woocommerce;
+            global $wp_version;
+            $connector = new GloBeeCurlConnector(
+                $this->payment_api_key,
+                $this->get_option('network') === 'livenet',
+                [
+                    'WooCommerce' => $woocommerce->version,
+                    'Wordpress' => $wp_version,
+                ]
+            );
+            $this->payment_api = new PaymentApi($connector);
+        }
+
+        return $this->payment_api;
     }
 }

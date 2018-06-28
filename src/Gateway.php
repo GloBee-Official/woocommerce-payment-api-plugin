@@ -113,7 +113,7 @@ class Gateway extends \WC_Payment_Gateway
             ],
             'payment_api_key' => [
                 'title' => __('Payment API Key', 'globee'),
-                'type' => 'text',
+                'type' => 'payment_api_key',
                 'description' => __(
                     'Your Payment API Key. You can find this key on the Payment API page of your account on globee.com',
                     'globee'
@@ -214,6 +214,29 @@ class Gateway extends \WC_Payment_Gateway
         $wcStatuses = wc_get_order_statuses();
 
         return View::make('order_states', compact('globeeStatuses', 'statuses', 'wcStatuses'));
+    }
+
+    public function generate_payment_api_key_html($key, $data)
+    {
+        $style = 'color: red; font-weight: 600;';
+        unset($data['type']);
+        if (empty($this->payment_api_key)) {
+            $message =  'Please enter a valid API key for the selected network.';
+        } else {
+            $paymentApi = $this->get_payment_api();
+            try {
+                $account = $paymentApi->getAccount();
+                $message = 'Authenticated as: '.$account->name;
+                $style = 'color: green';
+            } catch (AuthenticationException $e) {
+                $message = 'Couldn\'t authenticate using the supplied API key.';
+                $message .= ' Please make sure the key is valid and that you have selected the correct network.';
+            } catch (\Exception $e) {
+                $message = 'Unable to communicate with the GloBee server: '.get_class($e);
+            }
+        }
+        $html = '<tr><th>Authentication:</th><td style="'.$style.'">'.$message.'</td></tr>';
+        return $html.parent::generate_text_html($key, $data);
     }
 
     public function save_order_states()

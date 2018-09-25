@@ -280,29 +280,15 @@ class Gateway extends \WC_Payment_Gateway
     public function validate_url_field($key)
     {
         $url = $this->get_option($key);
-        if (isset($_POST[$this->id.$this->plugin_id.'_'.$key])) {
-            if (filter_var($_POST[$this->id.$this->plugin_id.'_'.$key], FILTER_VALIDATE_URL) !== false) {
-                return $_POST[$this->id.$this->plugin_id.'_'.$key];
+        if (isset($_POST[$this->plugin_id.$this->id.'_'.$key])) {
+            if (filter_var($_POST[$this->plugin_id.$this->id.'_'.$key], FILTER_VALIDATE_URL) !== false) {
+                return $_POST[$this->plugin_id.$this->id.'_'.$key];
             }
 
             return '';
         }
 
         return $url;
-    }
-
-    public function validate_redirect_url_field()
-    {
-        $redirectUrl = $this->get_option('redirect_url', '');
-        if (isset($_POST['globee_woocommerce_redirect_url'])) {
-            if (filter_var($_POST['globee_woocommerce_redirect_url'], FILTER_VALIDATE_URL) !== false) {
-                return $_POST['globee_woocommerce_redirect_url'];
-            }
-
-            return '';
-        }
-
-        return $redirectUrl;
     }
 
     public function thankyou_page($orderId)

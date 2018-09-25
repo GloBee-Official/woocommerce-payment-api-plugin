@@ -199,14 +199,16 @@ class Gateway extends \WC_Payment_Gateway
             'paid' => 'Paid',
             'confirmed' => 'Confirmed',
             'complete' => 'Complete',
+            'refunded' => 'Refunded',
             'invalid' => 'Invalid',
         ];
 
         $statuses = [
-            'new' => 'wc-on-hold',
+            'new' => 'wc-pending-payment',
             'paid' => 'wc-processing',
             'confirmed' => 'wc-processing',
-            'complete' => 'wc-completed',
+            'complete' => 'wc-processing',
+            'refunded' => 'wc-refunded',
             'invalid' => 'wc-failed',
         ];
 

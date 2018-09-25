@@ -50,7 +50,7 @@ class Gateway extends \WC_Payment_Gateway
         add_action('woocommerce_update_options_payment_gateways_'.$this->id, [$this, 'save_order_states']);
 
         // Save IPN Callback
-        add_action('woocommerce_api_wc_gateway_globee', [$this, 'ipn_callback']);
+        add_action('woocommerce_api_globee_ipn_callback', [$this, 'ipn_callback']);
 
         if (empty($_POST)) {
             add_action('admin_notices', [$this, 'validate_api_key']);
@@ -160,8 +160,8 @@ class Gateway extends \WC_Payment_Gateway
                     'GloBee will send IPNs for orders to this URL with the GloBee payment request data',
                     'globee'
                 ),
-                'default' => WC()->api_request_url('GloBee\\WooCommerce\\Gateway'),
-                'placeholder' => WC()->api_request_url('GloBee\\WooCommerce\\Gateway'),
+                'default' => WC()->api_request_url('globee_ipn_callback'),
+                'placeholder' => WC()->api_request_url('globee_ipn_callback'),
                 'desc_tip' => true,
             ],
             'redirect_url' => [
@@ -336,7 +336,7 @@ class Gateway extends \WC_Payment_Gateway
         $paymentRequest->successUrl = $this->get_option('redirect_url', $this->get_return_url());
         $paymentRequest->ipnUrl = $this->get_option(
             'notification_url',
-            WC()->api_request_url('GloBee\\WooCommerce\\Gateway')
+            WC()->api_request_url('globee_ipn_callback')
         );
         $paymentRequest->currency = get_woocommerce_currency();
         $paymentRequest->confirmationSpeed = $this->get_option('transaction_speed', 'medium');

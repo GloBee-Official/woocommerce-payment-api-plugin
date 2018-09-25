@@ -27,7 +27,6 @@ class Gateway extends \WC_Payment_Gateway
     public function __construct()
     {
         $this->id = 'globee';
-        $this->plugin_id = 'woocommerce';
         $this->icon = plugin_dir_url(__FILE__).'assets/images/icon.png';
         $this->has_fields = false;
         $this->method_title = 'GloBee';

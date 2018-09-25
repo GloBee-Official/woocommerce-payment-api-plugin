@@ -3,7 +3,7 @@
 Plugin Name: GloBee
 Plugin URI: https://globee.com/woocommerce
 Description: Accepts cryptocurrency payments on your WooCommerce Shop using GloBee.
-Version: 1.1.0
+Version: 1.1.1
 Author: GloBee
 Author URI: https://globee.com/
 
@@ -103,16 +103,6 @@ function globee_woocommerce_check_for_valid_system_requirements()
             .'WooCommerce 2.2 or higher'.$contactYourWebAdmin;
     }
 
-    # OpenSSL
-    if (extension_loaded('openssl') === false) {
-        $errors[] = 'The GloBee payment plugin requires the OpenSSL extension for PHP'.$contactYourWebAdmin;
-    }
-
-    # GMP
-    if (false === extension_loaded('gmp')) {
-        $errors[] = 'The GloBee payment plugin requires the GMP extension for PHP'.$contactYourWebAdmin;
-    }
-
     # BCMath
     if (false === extension_loaded('bcmath')) {
         $errors[] = 'The GloBee payment plugin requires the BC Math extension for PHP'.$contactYourWebAdmin;
@@ -142,7 +132,7 @@ function globee_woocommerce_activate()
     }
 
     # Update the version number
-    update_option('globee_woocommerce_version', '1.1.0');
+    update_option('globee_woocommerce_version', '1.1.1');
 
     # Check if an older version of the plugin needs to be deactivated
     foreach (get_plugins() as $file => $plugin) {

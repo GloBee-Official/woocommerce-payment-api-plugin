@@ -27,7 +27,6 @@ class Gateway extends \WC_Payment_Gateway
     public function __construct()
     {
         $this->id = 'globee';
-        $this->plugin_id = 'woocommerce';
         $this->icon = plugin_dir_url(__FILE__).'assets/images/icon.png';
         $this->has_fields = false;
         $this->method_title = 'GloBee';
@@ -51,7 +50,7 @@ class Gateway extends \WC_Payment_Gateway
         add_action('woocommerce_update_options_payment_gateways_'.$this->id, [$this, 'save_order_states']);
 
         // Save IPN Callback
-        add_action('woocommerce_api_wc_gateway_globee', [$this, 'ipn_callback']);
+        add_action('woocommerce_api_globee_ipn_callback', [$this, 'ipn_callback']);
 
         if (empty($_POST)) {
             add_action('admin_notices', [$this, 'validate_api_key']);
@@ -161,8 +160,8 @@ class Gateway extends \WC_Payment_Gateway
                     'GloBee will send IPNs for orders to this URL with the GloBee payment request data',
                     'globee'
                 ),
-                'default' => WC()->api_request_url('GloBee\\WooCommerce\\Gateway'),
-                'placeholder' => WC()->api_request_url('GloBee\\WooCommerce\\Gateway'),
+                'default' => WC()->api_request_url('globee_ipn_callback'),
+                'placeholder' => WC()->api_request_url('globee_ipn_callback'),
                 'desc_tip' => true,
             ],
             'redirect_url' => [
@@ -186,7 +185,7 @@ class Gateway extends \WC_Payment_Gateway
                         .'Thank you for using GloBee!',
                         'globee'
                     ),
-                    get_option('globee_woocommerce_version', '1.1.0'),
+                    get_option('globee_woocommerce_version', '1.1.1'),
                     PHP_MAJOR_VERSION.'.'.PHP_MINOR_VERSION
                 ),
             ],
@@ -200,14 +199,16 @@ class Gateway extends \WC_Payment_Gateway
             'paid' => 'Paid',
             'confirmed' => 'Confirmed',
             'complete' => 'Complete',
+            'refunded' => 'Refunded',
             'invalid' => 'Invalid',
         ];
 
         $statuses = [
-            'new' => 'wc-on-hold',
+            'new' => 'wc-pending-payment',
             'paid' => 'wc-processing',
             'confirmed' => 'wc-processing',
-            'complete' => 'wc-completed',
+            'complete' => 'wc-processing',
+            'refunded' => 'wc-refunded',
             'invalid' => 'wc-failed',
         ];
 
@@ -279,29 +280,15 @@ class Gateway extends \WC_Payment_Gateway
     public function validate_url_field($key)
     {
         $url = $this->get_option($key);
-        if (isset($_POST[$this->id.$this->plugin_id.'_'.$key])) {
-            if (filter_var($_POST[$this->id.$this->plugin_id.'_'.$key], FILTER_VALIDATE_URL) !== false) {
-                return $_POST[$this->id.$this->plugin_id.'_'.$key];
+        if (isset($_POST[$this->plugin_id.$this->id.'_'.$key])) {
+            if (filter_var($_POST[$this->plugin_id.$this->id.'_'.$key], FILTER_VALIDATE_URL) !== false) {
+                return $_POST[$this->plugin_id.$this->id.'_'.$key];
             }
 
             return '';
         }
 
         return $url;
-    }
-
-    public function validate_redirect_url_field()
-    {
-        $redirectUrl = $this->get_option('redirect_url', '');
-        if (isset($_POST['globee_woocommerce_redirect_url'])) {
-            if (filter_var($_POST['globee_woocommerce_redirect_url'], FILTER_VALIDATE_URL) !== false) {
-                return $_POST['globee_woocommerce_redirect_url'];
-            }
-
-            return '';
-        }
-
-        return $redirectUrl;
     }
 
     public function thankyou_page($orderId)
@@ -337,7 +324,7 @@ class Gateway extends \WC_Payment_Gateway
         $paymentRequest->successUrl = $this->get_option('redirect_url', $this->get_return_url());
         $paymentRequest->ipnUrl = $this->get_option(
             'notification_url',
-            WC()->api_request_url('GloBee\\WooCommerce\\Gateway')
+            WC()->api_request_url('globee_ipn_callback')
         );
         $paymentRequest->currency = get_woocommerce_currency();
         $paymentRequest->confirmationSpeed = $this->get_option('transaction_speed', 'medium');

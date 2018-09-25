@@ -103,16 +103,6 @@ function globee_woocommerce_check_for_valid_system_requirements()
             .'WooCommerce 2.2 or higher'.$contactYourWebAdmin;
     }
 
-    # OpenSSL
-    if (extension_loaded('openssl') === false) {
-        $errors[] = 'The GloBee payment plugin requires the OpenSSL extension for PHP'.$contactYourWebAdmin;
-    }
-
-    # GMP
-    if (false === extension_loaded('gmp')) {
-        $errors[] = 'The GloBee payment plugin requires the GMP extension for PHP'.$contactYourWebAdmin;
-    }
-
     # BCMath
     if (false === extension_loaded('bcmath')) {
         $errors[] = 'The GloBee payment plugin requires the BC Math extension for PHP'.$contactYourWebAdmin;

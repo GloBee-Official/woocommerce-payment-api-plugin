@@ -21,12 +21,12 @@
         "php": ">5.3",
         "globee/payment-api": "~v0.3.0"
     },
-	"require-dev": {
+    "require-dev": {
         "wp-cli/wp-cli": "*",
         "phpunit/phpunit": "~4.8"
-	},
-  "minimum-stability": "stable",
-  "config": {
-      "bin-dir": "bin/"
-  }
+    },
+    "minimum-stability": "stable",
+    "config": {
+        "bin-dir": "bin/"
+    }
 }

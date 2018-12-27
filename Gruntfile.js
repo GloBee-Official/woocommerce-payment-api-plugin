@@ -8,7 +8,7 @@ module.exports = function(grunt) {
             ],
             dev: {
                 src: [
-                    '~/www/woocommerce/wp-content/plugins/globee-woocommerce-payment-api-1.1.1/'
+                    '~/www/woocommerce/wp-content/plugins/globee-woocommerce-payment-api-1.1.2/'
                 ],
                 options: {
                     force: true
@@ -18,7 +18,7 @@ module.exports = function(grunt) {
         compress: {
             build: {
                 options: {
-                    archive: 'dist/globee-woocommerce-payment-api-1.1.1.zip'
+                    archive: 'dist/globee-woocommerce-payment-api-1.1.2.zip'
                 },
                 files: [
                     {
@@ -43,7 +43,7 @@ module.exports = function(grunt) {
                             'assets/images/**/**.*',
                             'templates/**/**.*'
                         ],
-                        dest: 'dist/globee-woocommerce-payment-api-1.1.1'
+                        dest: 'dist/globee-woocommerce-payment-api-1.1.2'
                     },
                     {
                         expand: true,
@@ -51,11 +51,11 @@ module.exports = function(grunt) {
                         src: [
                             '**/**.*'
                         ],
-                        dest: 'dist/globee-woocommerce-payment-api-1.1.1/lib'
+                        dest: 'dist/globee-woocommerce-payment-api-1.1.2/lib'
                     },
                     {
                         src: 'LICENSE',
-                        dest: 'dist/globee-woocommerce-payment-api-1.1.1/license.txt'
+                        dest: 'dist/globee-woocommerce-payment-api-1.1.2/license.txt'
                     }
                 ]
             },
@@ -63,11 +63,11 @@ module.exports = function(grunt) {
                 files: [
                     {
                         expand: true,
-                        cwd: 'dist/globee-woocommerce-payment-api-1.1.1',
+                        cwd: 'dist/globee-woocommerce-payment-api-1.1.2',
                         src: [
                             '**/**'
                         ],
-                        dest: '~/www/woocommerce/wp-content/plugins/globee-woocommerce-payment-api-1.1.1/'
+                        dest: '~/www/woocommerce/wp-content/plugins/globee-woocommerce-payment-api-1.1.2/'
                     }
                 ]
             }
@@ -75,7 +75,7 @@ module.exports = function(grunt) {
         cssmin: {
             build: {
                 files: {
-                    'dist/globee-woocommerce-payment-api-1.1.1/assets/css/style.css': [
+                    'dist/globee-woocommerce-payment-api-1.1.2/assets/css/style.css': [
                         'src/assets/css/**.css'
                     ]
                 }

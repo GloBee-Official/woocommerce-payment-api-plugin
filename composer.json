@@ -5,6 +5,7 @@
     "description": "GloBee payment gateway for WooCommerce",
     "version": "1.0.0",
     "require": {
+        "ext-json": "*",
         "php": ">5.3",
         "globee/payment-api": "~v0.3.0"
     },

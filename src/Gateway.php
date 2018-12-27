@@ -374,54 +374,30 @@ class Gateway extends \WC_Payment_Gateway
     public function ipn_callback()
     {
         // Retrieve the Invoice ID and Network URL from the supposed IPN data
-        $post = file_get_contents("php://input");
-        if (true === empty($post)) {
-            error_log('GloBee plugin received empty POST data for an IPN message.');
-            wp_die('No post data');
-        }
+        $post = file_get_contents('php://input');
 
         $json = json_decode($post, true);
-        if (!isset($json['id'])) {
-            error_log('GloBee plugin received an invalid JSON payload sent to IPN handler: '.$post);
-            wp_die('Invalid JSON');
+        if ($json === null || !isset($json['id'])) {
+            $this->throwException('GloBee plugin received an invalid JSON payload sent to IPN handler: '.$post);
         }
+        $paymentRequest = PaymentRequest::fromResponse($json);
 
-        if (false === array_key_exists('custom_payment_id', $json)) {
-            error_log(
-                'GloBee plugin did not receive a Payment ID present in JSON payload: '.var_export($json, true)
-            );
-            wp_die('No Custom Payment ID');
-        }
-        if (false === array_key_exists('status', $json)) {
-            error_log('GloBee plugin did not receive a status present in JSON payload: '.var_export($json, true));
-            wp_die('No Status');
-        }
-
-        $orderId = $json['custom_payment_id'];
+        $orderId = $paymentRequest->customPaymentId;
         $this->log('Processing Callback for Order ID: '.$orderId);
-        if (false === isset($orderId) && true === empty($orderId)) {
-            error_log('The GloBee payment plugin was called to process an IPN message but no order ID was set.');
-            throw new \Exception(
-                'The GloBee payment plugin was called to process an IPN message but no order ID was set.'
-            );
+        if (true === empty($orderId)) {
+            $this->throwException('The GloBee payment plugin was called to process an IPN message but no order ID was set.');
         }
 
         $order = wc_get_order($orderId);
         if (false === $order || 'WC_Order' !== get_class($order)) {
-            error_log(
-                'The GloBee payment plugin was called to process an IPN message but could not retrieve the order details for order_id '.$orderId
-            );
-            throw new \Exception(
+            $this->throwException(
                 'The GloBee payment plugin was called to process an IPN message but could not retrieve the order details for order_id '.$orderId
             );
         }
 
         $current_status = $order->get_status();
         if (false === isset($current_status) && true === empty($current_status)) {
-            error_log(
-                'The GloBee payment plugin was called to process an IPN message but could not obtain the current status from the order.'
-            );
-            throw new \Exception(
+            $this->throwException(
                 'The GloBee payment plugin was called to process an IPN message but could not obtain the current status from the order.'
             );
         }
@@ -431,28 +407,16 @@ class Gateway extends \WC_Payment_Gateway
         $confirmed_status = $orderStates['confirmed'];
         $complete_status = $orderStates['complete'];
         $invalid_status = $orderStates['invalid'];
-        $status = $json['status'];
-        if (false === isset($status) && true === empty($status)) {
-            error_log(
-                'The GloBee payment plugin was called to process an IPN message but could not obtain the new status from the payment request.'
-            );
-            throw new \Exception(
-                'The GloBee payment plugin was called to process an IPN message but could not obtain the new status from the payment request.'
-            );
-        }
 
         $paymentApi = $this->get_payment_api();
         $paymentRequest = $paymentApi->getPaymentRequest($json['id']);
         if ($paymentRequest->customPaymentId != $orderId) {
-            error_log(
-                'Trying to update an order where the order ID does not match the custom payment ID from the GloBee Payment Request.'
-            );
-            throw new \Exception(
+            $this->throwException(
                 'Trying to update an order where the order ID does not match the custom payment ID from the GloBee Payment Request.'
             );
         }
 
-        switch ($status) {
+        switch ($paymentRequest->status) {
             case 'paid':
                 if (!($current_status == $complete_status || 'wc_'.$current_status == $complete_status || $current_status == 'completed')) {
                     $order->update_status($paid_status);
@@ -506,8 +470,8 @@ class Gateway extends \WC_Payment_Gateway
                 }
                 break;
         }
-        error_log('[INFO] Changed Order '.$orderId.'\'s state from '.$current_status.' to '.$status);
 
+        $this->log("[INFO] Changed Order {$orderId}'s state from {$current_status} to {$paymentRequest->status}", 'INFO');
     }
 
     /**
@@ -543,5 +507,16 @@ class Gateway extends \WC_Payment_Gateway
             echo '<p>'.wp_kses_post($error).'</p>';
         }
         echo '</div>';
+    }
+
+    /**
+     * @param $message
+     *
+     * @throws \Exception
+     */
+    protected function throwException($message)
+    {
+        error_log($message);
+        throw new \Exception($message);
     }
 }

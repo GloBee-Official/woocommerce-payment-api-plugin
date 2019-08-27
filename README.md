@@ -27,4 +27,5 @@ $ ./node_modules/.bin/grunt build
 The built plugin archive is available at `dist/globee-woocommerce-1.0.0.zip`
 
 ## Versions
-Tested on WordPress v4.9.6 and WooCommerce v3.4.2
+- Tested on WordPress v5.2.2 and WooCommerce v3.7.0
+- Tested on WordPress v4.9.6 and WooCommerce v3.4.2

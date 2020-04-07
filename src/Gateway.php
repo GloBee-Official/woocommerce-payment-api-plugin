@@ -389,19 +389,7 @@ class Gateway extends \WC_Payment_Gateway
         }
 
         $order = wc_get_order($orderId);
-        if (false === $order || 'WC_Order' !== get_class($order)) {
-            $this->throwException(
-                'The GloBee payment plugin was called to process an IPN message but could not retrieve the order details for order_id '.$orderId
-            );
-        }
-
         $current_status = $order->get_status();
-        if (false === isset($current_status) && true === empty($current_status)) {
-            $this->throwException(
-                'The GloBee payment plugin was called to process an IPN message but could not obtain the current status from the order.'
-            );
-        }
-
         $orderStates = get_option('globee_woocommerce_order_states');
         $paid_status = $orderStates['paid'];
         $confirmed_status = $orderStates['confirmed'];

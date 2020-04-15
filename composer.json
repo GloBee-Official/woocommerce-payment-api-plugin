@@ -1,5 +1,5 @@
 {
-    "name": "woocommerce-payment-api-plugin",
+    "name": "globee/woocommerce-payment-api-plugin",
     "license": "MIT",
     "description": "GloBee payment gateway for WooCommerce",
     "version": "1.0.0",

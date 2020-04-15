@@ -18,7 +18,7 @@ module.exports = function(grunt) {
         compress: {
             build: {
                 options: {
-                    archive: 'dist/globee-woocommerce-payment-api-1.1.2.zip'
+                    archive: 'dist/globee-woocommerce-payment-api-2.0.0.zip'
                 },
                 files: [
                     {

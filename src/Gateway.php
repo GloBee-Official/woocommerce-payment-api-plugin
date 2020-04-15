@@ -350,19 +350,6 @@ class Gateway extends \WC_Payment_Gateway
         ];
     }
 
-    public function log($message, $level = 'info', $source = null)
-    {
-        error_log($message);
-        if ($source == null) {
-            $source = 'globee_woocommerce';
-        }
-
-        if (empty(self::$log)) {
-            self::$log = wc_get_logger();
-        }
-        self::$log->log($level, $message, array('source' => $source));
-    }
-
     public function ipn_callback()
     {
         // Retrieve the Invoice ID and Network URL from the supposed IPN data
@@ -454,6 +441,29 @@ class Gateway extends \WC_Payment_Gateway
         $this->log("[INFO] Changed Order {$orderId}'s state from {$current_status} to {$paymentRequest->status}", 'INFO');
     }
 
+    public function display_globee_errors($errors)
+    {
+        $errors = (array)$errors;
+        echo '<div id="woocommerce_errors" class="error notice is-dismissible">';
+        foreach ($errors as $error) {
+            echo '<p>'.wp_kses_post($error).'</p>';
+        }
+        echo '</div>';
+    }
+
+    public function log($message, $level = 'info', $source = null)
+    {
+        error_log($message);
+        if ($source == null) {
+            $source = 'globee_woocommerce';
+        }
+
+        if (empty(self::$log)) {
+            self::$log = wc_get_logger();
+        }
+        self::$log->log($level, $message, array('source' => $source));
+    }
+
     protected function get_payment_api()
     {
         if (!$this->payment_api) {
@@ -473,15 +483,6 @@ class Gateway extends \WC_Payment_Gateway
         return $this->payment_api;
     }
 
-    public function display_globee_errors($errors)
-    {
-        $errors = (array)$errors;
-        echo '<div id="woocommerce_errors" class="error notice is-dismissible">';
-        foreach ($errors as $error) {
-            echo '<p>'.wp_kses_post($error).'</p>';
-        }
-        echo '</div>';
-    }
     protected function throwException($message)
     {
         error_log($message);

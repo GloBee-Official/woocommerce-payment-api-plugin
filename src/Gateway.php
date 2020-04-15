@@ -57,9 +57,6 @@ class Gateway extends \WC_Payment_Gateway
         }
     }
 
-    /**
-     * Validate api key
-     */
     public function validate_api_key()
     {
         if (empty($this->payment_api_key)) {
@@ -293,7 +290,6 @@ class Gateway extends \WC_Payment_Gateway
 
     public function thankyou_page($orderId)
     {
-        // Do something here if you want to customize the return url page
     }
 
     public function process_payment($order_id)
@@ -345,10 +341,6 @@ class Gateway extends \WC_Payment_Gateway
 
         $redirectUrl = $response->redirectUrl; // Redirect your client to this URL to make payment
 
-        // Redurce order stock
-        wc_reduce_stock_levels($order_id);
-
-        // Remove cart
         WC()->cart->empty_cart();
 
         // Redirect the customer to the globee invoice
@@ -462,9 +454,6 @@ class Gateway extends \WC_Payment_Gateway
         $this->log("[INFO] Changed Order {$orderId}'s state from {$current_status} to {$paymentRequest->status}", 'INFO');
     }
 
-    /**
-     * @return PaymentApi
-     */
     protected function get_payment_api()
     {
         if (!$this->payment_api) {
@@ -484,9 +473,6 @@ class Gateway extends \WC_Payment_Gateway
         return $this->payment_api;
     }
 
-    /**
-     * @param $errors
-     */
     public function display_globee_errors($errors)
     {
         $errors = (array)$errors;
@@ -496,12 +482,6 @@ class Gateway extends \WC_Payment_Gateway
         }
         echo '</div>';
     }
-
-    /**
-     * @param $message
-     *
-     * @throws \Exception
-     */
     protected function throwException($message)
     {
         error_log($message);

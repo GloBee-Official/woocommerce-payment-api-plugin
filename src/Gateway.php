@@ -57,9 +57,6 @@ class Gateway extends \WC_Payment_Gateway
         }
     }
 
-    /**
-     * Validate api key
-     */
     public function validate_api_key()
     {
         if (empty($this->payment_api_key)) {
@@ -185,7 +182,7 @@ class Gateway extends \WC_Payment_Gateway
                         .'Thank you for using GloBee!',
                         'globee'
                     ),
-                    get_option('globee_woocommerce_version', '1.1.2'),
+                    get_option('globee_woocommerce_version', '2.0.0'),
                     PHP_MAJOR_VERSION.'.'.PHP_MINOR_VERSION
                 ),
             ],
@@ -198,7 +195,7 @@ class Gateway extends \WC_Payment_Gateway
             'new' => 'New Order',
             'paid' => 'Paid',
             'confirmed' => 'Confirmed',
-            'complete' => 'Complete',
+            'completed' => 'Completed',
             'refunded' => 'Refunded',
             'invalid' => 'Invalid',
         ];
@@ -207,7 +204,7 @@ class Gateway extends \WC_Payment_Gateway
             'new' => 'wc-pending-payment',
             'paid' => 'wc-processing',
             'confirmed' => 'wc-processing',
-            'complete' => 'wc-processing',
+            'completed' => 'wc-completed',
             'refunded' => 'wc-refunded',
             'invalid' => 'wc-failed',
         ];
@@ -246,7 +243,8 @@ class Gateway extends \WC_Payment_Gateway
             'new' => 'New Order',
             'paid' => 'Paid',
             'confirmed' => 'Confirmed',
-            'complete' => 'Complete',
+            'completed' => 'Completed',
+            'refunded' => 'Refunded',
             'invalid' => 'Invalid',
         ];
 
@@ -293,25 +291,18 @@ class Gateway extends \WC_Payment_Gateway
 
     public function thankyou_page($orderId)
     {
-        // Do something here if you want to customize the return url page
     }
 
-    public function process_payment($order_id)
+    public function process_payment($orderId)
     {
-        $this->log('Processing Order ID: '.$order_id);
+        $this->log('Processing Order ID: '.$orderId);
 
-        if (true === empty($order_id)) {
-            throw new \Exception(
-                'The GloBee payment plugin was called to process a payment but the '
-                .'orderId was missing.'
-            );
-        }
-
-        $order = wc_get_order($order_id);
+        $order = wc_get_order($orderId);
         if (false === $order) {
+            $this->log('Order not found: '.$orderId);
             throw new \Exception(
                 'The GloBee payment plugin was called to process a payment but could '
-                .'not retrieve the order details for order_id '.$order_id.'.'
+                .'not retrieve the order details for order_id '.$orderId.'.'
             );
         }
 
@@ -320,20 +311,21 @@ class Gateway extends \WC_Payment_Gateway
         $order->update_status($newOrderStatus, 'Awaiting payment notification from GloBee.');
 
         $paymentApi = $this->get_payment_api();
-        $paymentRequest = new PaymentRequest();
-        $paymentRequest->successUrl = $this->get_option('redirect_url', $this->get_return_url());
-        $paymentRequest->ipnUrl = $this->get_option(
+        /** @var PaymentRequest $paymentRequest */
+        $paymentRequest = new PaymentRequest($order->get_billing_email(), $order->calculate_totals(), get_woocommerce_currency());
+        $paymentRequest->setSuccessUrl($this->get_option('redirect_url', $this->get_return_url()));
+        $paymentRequest->setIpnUrl($this->get_option(
             'notification_url',
             WC()->api_request_url('globee_ipn_callback')
-        );
-        $paymentRequest->currency = get_woocommerce_currency();
-        $paymentRequest->confirmationSpeed = $this->get_option('transaction_speed', 'medium');
-        $paymentRequest->total = $order->calculate_totals();
-        $paymentRequest->customerEmail = $order->get_billing_email();
-        $paymentRequest->customPaymentId = $order_id;
+        ));
+        $paymentRequest->setConfirmationSpeed($this->get_option('transaction_speed', 'medium'));
+        $paymentRequest->setCustomPaymentId($orderId);
         try {
             $response = $paymentApi->createPaymentRequest($paymentRequest);
         } catch (ValidationException $e) {
+
+            $this->log('Could not create payment request on GloBee for order: '.$orderId);
+
             $errors = '';
             foreach ($e->getErrors() as $error) {
                 $errors .= $error['message']."<br/>";
@@ -345,10 +337,6 @@ class Gateway extends \WC_Payment_Gateway
 
         $redirectUrl = $response->redirectUrl; // Redirect your client to this URL to make payment
 
-        // Redurce order stock
-        wc_reduce_stock_levels($order_id);
-
-        // Remove cart
         WC()->cart->empty_cart();
 
         // Redirect the customer to the globee invoice
@@ -356,19 +344,6 @@ class Gateway extends \WC_Payment_Gateway
             'result' => 'success',
             'redirect' => $redirectUrl,
         ];
-    }
-
-    public function log($message, $level = 'info', $source = null)
-    {
-        error_log($message);
-        if ($source == null) {
-            $source = 'globee_woocommerce';
-        }
-
-        if (empty(self::$log)) {
-            self::$log = wc_get_logger();
-        }
-        self::$log->log($level, $message, array('source' => $source));
     }
 
     public function ipn_callback()
@@ -385,15 +360,17 @@ class Gateway extends \WC_Payment_Gateway
         $orderId = $paymentRequest->customPaymentId;
         $this->log('Processing Callback for Order ID: '.$orderId);
         if (true === empty($orderId)) {
+            $this->log('Order ID not set');
             $this->throwException('The GloBee payment plugin was called to process an IPN message but no order ID was set.');
         }
 
+        wc_reduce_stock_levels($orderId);
         $order = wc_get_order($orderId);
         $current_status = $order->get_status();
         $orderStates = get_option('globee_woocommerce_order_states');
         $paid_status = $orderStates['paid'];
         $confirmed_status = $orderStates['confirmed'];
-        $complete_status = $orderStates['complete'];
+        $complete_status = $orderStates['completed'];
         $invalid_status = $orderStates['invalid'];
 
         $paymentApi = $this->get_payment_api();
@@ -404,34 +381,13 @@ class Gateway extends \WC_Payment_Gateway
             );
         }
 
-        switch ($paymentRequest->status) {
-            case 'paid':
-                if (!($current_status == $complete_status || 'wc_'.$current_status == $complete_status || $current_status == 'completed')) {
-                    $order->update_status($paid_status);
-                    $order->add_order_note(
-                        __(
-                            'GloBee payment paid. Awaiting network confirmation and payment '
-                            .'completed status.',
-                            'globee'
-                        )
-                    );
-                }
-                break;
 
-            case 'confirmed':
-                if (!($current_status == $complete_status || 'wc_'.$current_status == $complete_status || $current_status == 'completed')) {
-                    $order->update_status($confirmed_status);
-                    $order->add_order_note(
-                        __(
-                            'GloBee payment confirmed. Awaiting payment completed status.',
-                            'globee'
-                        )
-                    );
-                }
-                break;
+        $this->log('Order Current Status: '.$current_status);
+        switch (strtolower($paymentRequest->status)) {
 
             case 'completed':
-                if (!($current_status == $complete_status || 'wc_'.$current_status == $complete_status || $current_status == 'completed')) {
+                $this->log('Payment Completed: '.$orderId);
+                if (!($current_status == $complete_status || 'wc_'.$current_status == $complete_status || 'wc-'.$current_status == $complete_status || $current_status == 'complete')) {
                     $order->payment_complete();
                     $order->update_status($complete_status);
                     $order->add_order_note(
@@ -444,8 +400,36 @@ class Gateway extends \WC_Payment_Gateway
                 }
                 break;
 
+            case 'confirmed':
+                $this->log('Payment Confirmed: '.$orderId);
+                if (!($current_status == $confirmed_status || 'wc_'.$current_status == $confirmed_status || 'wc-'.$current_status == $confirmed_status || $current_status == 'confirmed')) {
+                    $order->update_status($confirmed_status);
+                    $order->add_order_note(
+                        __(
+                            'GloBee payment confirmed. Awaiting payment completed status.',
+                            'globee'
+                        )
+                    );
+                }
+                break;
+
+            case 'paid':
+                $this->log('Payment Paid: '.$orderId);
+                if (!($current_status == $paid_status || 'wc_'.$current_status == $paid_status || 'wc-'.$current_status == $paid_status || $current_status == 'paid')) {
+                    $order->update_status($paid_status);
+                    $order->add_order_note(
+                        __(
+                            'GloBee payment paid. Awaiting network confirmation and payment '
+                            .'completed status.',
+                            'globee'
+                        )
+                    );
+                }
+                break;
+
             case 'invalid':
-                if (!($current_status == $complete_status || 'wc_'.$current_status == $complete_status || $current_status == 'completed')) {
+                $this->log('Payment Invalid: '.$orderId);
+                if (!($current_status == $invalid_status || 'wc_'.$current_status == $invalid_status || 'wc-'.$current_status == $invalid_status || $current_status == 'completed')) {
                     $order->update_status(
                         $invalid_status,
                         __(
@@ -462,9 +446,29 @@ class Gateway extends \WC_Payment_Gateway
         $this->log("[INFO] Changed Order {$orderId}'s state from {$current_status} to {$paymentRequest->status}", 'INFO');
     }
 
-    /**
-     * @return PaymentApi
-     */
+    public function display_globee_errors($errors)
+    {
+        $errors = (array)$errors;
+        echo '<div id="woocommerce_errors" class="error notice is-dismissible">';
+        foreach ($errors as $error) {
+            echo '<p>'.wp_kses_post($error).'</p>';
+        }
+        echo '</div>';
+    }
+
+    public function log($message, $level = 'info', $source = null)
+    {
+        error_log($message);
+        if ($source == null) {
+            $source = 'globee_woocommerce';
+        }
+
+        if (empty(self::$log)) {
+            self::$log = wc_get_logger();
+        }
+        self::$log->log($level, $message, array('source' => $source));
+    }
+
     protected function get_payment_api()
     {
         if (!$this->payment_api) {
@@ -484,24 +488,6 @@ class Gateway extends \WC_Payment_Gateway
         return $this->payment_api;
     }
 
-    /**
-     * @param $errors
-     */
-    public function display_globee_errors($errors)
-    {
-        $errors = (array)$errors;
-        echo '<div id="woocommerce_errors" class="error notice is-dismissible">';
-        foreach ($errors as $error) {
-            echo '<p>'.wp_kses_post($error).'</p>';
-        }
-        echo '</div>';
-    }
-
-    /**
-     * @param $message
-     *
-     * @throws \Exception
-     */
     protected function throwException($message)
     {
         error_log($message);

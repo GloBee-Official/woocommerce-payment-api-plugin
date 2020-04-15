@@ -4,7 +4,7 @@ module.exports = function(grunt) {
         pkg: grunt.file.readJSON('package.json'),
         clean: {
             build: [
-                'dist'
+                'build'
             ],
             dev: {
                 src: [
@@ -18,12 +18,12 @@ module.exports = function(grunt) {
         compress: {
             build: {
                 options: {
-                    archive: 'dist/globee-woocommerce-payment-api-1.1.2.zip'
+                    archive: 'dist/globee-woocommerce-payment-api-2.0.0.zip'
                 },
                 files: [
                     {
                         expand: true,
-                        cwd: 'dist',
+                        cwd: 'build',
                         src: [
                             '**'
                         ]
@@ -43,7 +43,7 @@ module.exports = function(grunt) {
                             'assets/images/**/**.*',
                             'templates/**/**.*'
                         ],
-                        dest: 'dist/globee-woocommerce-payment-api'
+                        dest: 'build/globee-woocommerce-payment-api'
                     },
                     {
                         expand: true,
@@ -51,11 +51,11 @@ module.exports = function(grunt) {
                         src: [
                             '**/**.*'
                         ],
-                        dest: 'dist/globee-woocommerce-payment-api/lib'
+                        dest: 'build/globee-woocommerce-payment-api/lib'
                     },
                     {
                         src: 'LICENSE',
-                        dest: 'dist/globee-woocommerce-payment-api/license.txt'
+                        dest: 'build/globee-woocommerce-payment-api/license.txt'
                     }
                 ]
             },
@@ -63,7 +63,7 @@ module.exports = function(grunt) {
                 files: [
                     {
                         expand: true,
-                        cwd: 'dist/globee-woocommerce-payment-api',
+                        cwd: 'build/globee-woocommerce-payment-api',
                         src: [
                             '**/**'
                         ],
@@ -75,7 +75,7 @@ module.exports = function(grunt) {
         cssmin: {
             build: {
                 files: {
-                    'dist/globee-woocommerce-payment-api/assets/css/style.css': [
+                    'build/globee-woocommerce-payment-api/assets/css/style.css': [
                         'src/assets/css/**.css'
                     ]
                 }
@@ -123,7 +123,8 @@ module.exports = function(grunt) {
         'clean:build',
         'cssmin:build',
         'copy:build',
-        'compress:build'
+        'compress:build',
+        'clean:build',
     ]);
     grunt.registerTask('dev', [
         'build',
